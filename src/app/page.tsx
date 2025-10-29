@@ -6,7 +6,6 @@ import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
 import { Sidebar } from '@/components/Sidebar'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
-import { TerminalNav } from '@/components/TerminalNav'
 import { Editor } from '@/components/Editor'
 import { Canvas } from '@/components/Canvas'
 import { AIPanel } from '@/components/AIPanel'
@@ -78,9 +77,6 @@ export default function Home() {
           )}
         </div>
       </div>
-
-      {/* Terminal Navigation (Toggleable) */}
-      <TerminalNav />
 
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">

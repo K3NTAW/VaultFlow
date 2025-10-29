@@ -55,6 +55,40 @@ const slashCommands: SlashCommand[] = [
     command: (editor) => editor.chain().focus().clearNodes().toggleCodeBlock().run(),
   },
   {
+    title: 'Task List',
+    description: 'Create a to-do list with checkboxes',
+    icon: '☑',
+    command: (editor) => editor.chain().focus().toggleTaskList().run(),
+  },
+  {
+    title: 'Table',
+    description: 'Insert a table',
+    icon: '⊞',
+    command: (editor) => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+  },
+  {
+    title: 'Image',
+    description: 'Insert an image',
+    icon: '🖼',
+    command: (editor) => {
+      const url = window.prompt('Enter image URL or paste base64:')
+      if (url) {
+        editor.chain().focus().setImage({ src: url }).run()
+      }
+    },
+  },
+  {
+    title: 'Link',
+    description: 'Add a link',
+    icon: '🔗',
+    command: (editor) => {
+      const url = window.prompt('Enter URL:')
+      if (url) {
+        editor.chain().focus().setLink({ href: url }).run()
+      }
+    },
+  },
+  {
     title: 'Divider',
     description: 'Insert a horizontal divider',
     icon: '─',

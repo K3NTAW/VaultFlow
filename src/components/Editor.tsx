@@ -2,11 +2,32 @@
 
 import { useEffect, useCallback, useState, useRef } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
+import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
+import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
+import Underline from '@tiptap/extension-underline'
+import Placeholder from '@tiptap/extension-placeholder'
+import TaskList from '@tiptap/extension-task-list'
+import TaskItem from '@tiptap/extension-task-item'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { Color } from '@tiptap/extension-color'
+import { Highlight } from '@tiptap/extension-highlight'
+import { TextAlign } from '@tiptap/extension-text-align'
+import { Subscript } from '@tiptap/extension-subscript'
+import { Superscript } from '@tiptap/extension-superscript'
+import { CharacterCount } from '@tiptap/extension-character-count'
 import { useVaultStore } from '@/store/useVaultStore'
 import { readFile, writeFileToVault } from '@/lib/vault'
 import { ScrollArea } from './ui/scroll-area'
 import { SlashMenu } from './SlashMenu'
+import { BlockControls } from './BlockControls'
+import { Button } from './ui/button'
+import { cn } from '@/lib/utils'
 import { marked } from 'marked'
 import TurndownService from 'turndown'
 
@@ -17,13 +38,68 @@ export function Editor() {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashMenuPosition, setSlashMenuPosition] = useState<{ top: number; left: number } | null>(null)
   const [slashQuery, setSlashQuery] = useState('')
-  const editorRef = useRef<HTMLDivElement>(null)
+  const editorContainerRef = useRef<HTMLDivElement>(null)
   const [slashIndex, setSlashIndex] = useState(-1)
   const slashMenuOpenRef = useRef(false)
+  const editorInstanceRef = useRef<any>(null)
   const turndownService = useState(() => new TurndownService())[0]
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-primary underline cursor-pointer',
+        },
+      }),
+      Image.configure({
+        inline: true,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'rounded-md',
+        },
+      }),
+      Underline,
+      Placeholder.configure({
+        placeholder: 'Start writing or type / for commands...',
+      }),
+      TaskList.configure({
+        HTMLAttributes: {
+          class: 'list-none pl-0',
+        },
+      }),
+      TaskItem.configure({
+        nested: true,
+        HTMLAttributes: {
+          class: 'flex items-start gap-2',
+        },
+      }),
+      Table.configure({
+        resizable: true,
+        HTMLAttributes: {
+          class: 'border-collapse border border-border',
+        },
+      }),
+      TableRow,
+      TableHeader.configure({
+        HTMLAttributes: {
+          class: 'bg-muted font-semibold',
+        },
+      }),
+      TableCell,
+      TextStyle,
+      Color,
+      Highlight.configure({
+        multicolor: true,
+      }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      Subscript,
+      Superscript,
+      CharacterCount,
+    ],
     content: '<p></p>',
     editable: true,
     autofocus: false,
@@ -39,10 +115,26 @@ export function Editor() {
           event.stopPropagation()
           return true
         }
+        // Cmd/Ctrl + K for links
+        if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+          event.preventDefault()
+          const url = window.prompt('Enter URL:')
+          if (url && editorInstanceRef.current) {
+            editorInstanceRef.current.chain().focus().setLink({ href: url }).run()
+          }
+          return true
+        }
         return false
       },
     },
   })
+
+  // Store editor reference for key handlers
+  useEffect(() => {
+    if (editor) {
+      editorInstanceRef.current = editor
+    }
+  }, [editor])
 
   // Load file content
   useEffect(() => {
@@ -75,7 +167,7 @@ export function Editor() {
         
         // Clear editor and set new content
         editor.commands.clearContent()
-        editor.commands.setContent(htmlContent, false)
+        editor.commands.setContent(htmlContent)
         console.log('✓ Editor content set')
       } catch (error) {
         console.error('✗ Error loading file:', error)
@@ -84,7 +176,7 @@ export function Editor() {
         marked.setOptions({ breaks: true, gfm: true })
         const defaultContent = marked.parse(defaultMd) as string
         editor.commands.clearContent()
-        editor.commands.setContent(defaultContent, false)
+        editor.commands.setContent(defaultContent)
       } finally {
         setIsLoading(false)
       }
@@ -200,16 +292,188 @@ export function Editor() {
 
   return (
     <>
-      <div ref={editorRef} className="h-full flex flex-col relative">
+      <div ref={editorContainerRef} className="h-full flex flex-col relative">
         <div className="border-b border-border px-4 py-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold">{currentFile}</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            {editor && (
+              <span className="text-xs text-muted-foreground">
+                {editor.storage.characterCount.characters()} chars / {editor.storage.characterCount.words()} words
+              </span>
+            )}
             {isLoading && <span className="text-xs text-muted-foreground">Loading...</span>}
             {isSaving && <span className="text-xs text-muted-foreground">Saving...</span>}
           </div>
         </div>
         <ScrollArea className="flex-1">
-          <EditorContent editor={editor} className="h-full" />
+          <div className="relative">
+            <EditorContent editor={editor} className="h-full" />
+            <BlockControls editor={editor} />
+            
+            {/* Bubble Menu - Shows when text is selected */}
+            {editor && (
+              <BubbleMenu
+                editor={editor}
+                className="flex items-center gap-1 bg-background border border-border rounded-md shadow-lg p-1"
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleBold().run()}
+                  className={cn('h-8 w-8 p-0', editor.isActive('bold') && 'bg-accent')}
+                  title="Bold"
+                >
+                  <span className="font-bold text-xs">B</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleItalic().run()}
+                  className={cn('h-8 w-8 p-0', editor.isActive('italic') && 'bg-accent')}
+                  title="Italic"
+                >
+                  <span className="italic text-xs">I</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleUnderline().run()}
+                  className={cn('h-8 w-8 p-0', editor.isActive('underline') && 'bg-accent')}
+                  title="Underline"
+                >
+                  <span className="underline text-xs">U</span>
+                </Button>
+                <div className="w-px h-6 bg-border mx-1" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleStrike().run()}
+                  className={cn('h-8 w-8 p-0', editor.isActive('strike') && 'bg-accent')}
+                  title="Strikethrough"
+                >
+                  <span className="line-through text-xs">S</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleCode().run()}
+                  className={cn('h-8 w-8 p-0 font-mono text-xs', editor.isActive('code') && 'bg-accent')}
+                  title="Code"
+                >
+                  {'</>'}
+                </Button>
+                <div className="w-px h-6 bg-border mx-1" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleSubscript().run()}
+                  className={cn('h-8 w-8 p-0 text-xs', editor.isActive('subscript') && 'bg-accent')}
+                  title="Subscript"
+                >
+                  x<sub className="text-[0.6em]">2</sub>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleSuperscript().run()}
+                  className={cn('h-8 w-8 p-0 text-xs', editor.isActive('superscript') && 'bg-accent')}
+                  title="Superscript"
+                >
+                  x<sup className="text-[0.6em]">2</sup>
+                </Button>
+                <div className="w-px h-6 bg-border mx-1" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const url = window.prompt('Enter URL:')
+                    if (url) {
+                      editor.chain().focus().setLink({ href: url }).run()
+                    }
+                  }}
+                  className={cn('h-8 w-8 p-0', editor.isActive('link') && 'bg-accent')}
+                  title="Link"
+                >
+                  🔗
+                </Button>
+              </BubbleMenu>
+            )}
+
+            {/* Floating Menu - Shows on empty lines */}
+            {editor && (
+              <FloatingMenu
+                editor={editor}
+                className="flex items-center gap-1 bg-background border border-border rounded-md shadow-lg p-1"
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                  className={cn('h-8 px-2 text-xs', editor.isActive('heading', { level: 1 }) && 'bg-accent')}
+                >
+                  H1
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                  className={cn('h-8 px-2 text-xs', editor.isActive('heading', { level: 2 }) && 'bg-accent')}
+                >
+                  H2
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                  className={cn('h-8 px-2 text-xs', editor.isActive('heading', { level: 3 }) && 'bg-accent')}
+                >
+                  H3
+                </Button>
+                <div className="w-px h-6 bg-border mx-1" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleBulletList().run()}
+                  className={cn('h-8 px-2 text-xs', editor.isActive('bulletList') && 'bg-accent')}
+                >
+                  •
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                  className={cn('h-8 px-2 text-xs', editor.isActive('orderedList') && 'bg-accent')}
+                >
+                  1.
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleTaskList().run()}
+                  className={cn('h-8 px-2 text-xs', editor.isActive('taskList') && 'bg-accent')}
+                >
+                  ☑
+                </Button>
+                <div className="w-px h-6 bg-border mx-1" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                  className={cn('h-8 px-2 text-xs', editor.isActive('blockquote') && 'bg-accent')}
+                >
+                  "
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                  className={cn('h-8 px-2 text-xs font-mono', editor.isActive('codeBlock') && 'bg-accent')}
+                >
+                  {'{}'}
+                </Button>
+              </FloatingMenu>
+            )}
+          </div>
         </ScrollArea>
       </div>
       {showSlashMenu && (

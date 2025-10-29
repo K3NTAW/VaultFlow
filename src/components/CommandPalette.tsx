@@ -18,7 +18,7 @@ import { writeFileToVault } from '@/lib/vault'
 
 export function CommandPalette() {
   const { vaultPath, setVaultPath, refresh } = useVaultStore()
-  const { setTerminalVisible, setCurrentPath } = useNavStore()
+  const { setCurrentPath } = useNavStore()
   const { addMessage, setIsProcessing } = useAIStore()
 
   const actions = [
@@ -142,15 +142,6 @@ export function CommandPalette() {
       perform: () => {
         // This could open a search modal or focus search input
         alert('Search functionality - to be implemented')
-      },
-    },
-    {
-      id: 'toggle-terminal',
-      name: 'Toggle Terminal',
-      shortcut: ['t'],
-      keywords: 'terminal command line',
-      perform: () => {
-        setTerminalVisible(true)
       },
     },
     {
