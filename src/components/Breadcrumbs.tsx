@@ -12,13 +12,14 @@ export function Breadcrumbs() {
   const segments = displayPath.split('/').filter(Boolean)
 
   const handleClick = (index: number) => {
+    const { setCurrentFile } = useVaultStore.getState()
     if (index === -1) {
-      setCurrentPath('/')
-      useVaultStore.getState().setCurrentFile(null)
+      setCurrentPath('') // Root vault
+      setCurrentFile(null)
     } else {
-      const newPath = '/' + segments.slice(0, index + 1).join('/')
+      const newPath = segments.slice(0, index + 1).join('/')
       setCurrentPath(newPath)
-      useVaultStore.getState().setCurrentFile(null)
+      setCurrentFile(null)
     }
   }
 

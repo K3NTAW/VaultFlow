@@ -10,7 +10,7 @@ interface NavState {
 }
 
 export const useNavStore = create<NavState>((set) => ({
-  currentPath: '/',
+  currentPath: '', // Start at root vault
   setCurrentPath: (path) => set({ currentPath: path }),
   aiPanelVisible: false, // Hidden by default
   setAIPanelVisible: (visible) => set({ aiPanelVisible: visible }),

@@ -33,8 +33,10 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
     if (entry.isDirectory) {
       toggleExpand(entry.path)
       setCurrentPath(entry.path)
+      setCurrentFile(null) // Clear file selection when opening folder
     } else if (isNote(entry.name) || isCanvas(entry.name)) {
       setCurrentFile(entry.path)
+      setCurrentPath(null) // Clear folder path when opening file
     }
   }
 

@@ -10,6 +10,7 @@ import { Editor } from '@/components/Editor'
 import { Canvas } from '@/components/Canvas'
 import { AIPanel } from '@/components/AIPanel'
 import { VaultSelector } from '@/components/VaultSelector'
+import { FolderView } from '@/components/FolderView'
 
 const CommandPalette = dynamic(() => import('@/components/CommandPalette'), {
   ssr: false,
@@ -17,7 +18,7 @@ const CommandPalette = dynamic(() => import('@/components/CommandPalette'), {
 
 export default function Home() {
   const { vaultPath, setVaultPath, currentFile, setCurrentFile } = useVaultStore()
-  const { aiPanelVisible, setAIPanelVisible, sidebarVisible, setSidebarVisible } = useNavStore()
+  const { aiPanelVisible, setAIPanelVisible, sidebarVisible, setSidebarVisible, currentPath } = useNavStore()
 
   useEffect(() => {
     // Keyboard shortcuts
@@ -102,11 +103,7 @@ export default function Home() {
         <main className="flex-1 overflow-auto">
           {isCanvas && <Canvas />}
           {isNote && <Editor />}
-          {!currentFile && (
-            <div className="h-full flex items-center justify-center text-muted-foreground">
-              <p>Select a note or canvas to get started</p>
-            </div>
-          )}
+          {!currentFile && <FolderView />}
         </main>
 
         {/* Right AI Panel (Toggleable) */}
