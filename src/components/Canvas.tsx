@@ -15,6 +15,8 @@ const Excalidraw = dynamic(
 
 import { useVaultStore } from '@/store/useVaultStore'
 import { readFile, writeFileToVault } from '@/lib/vault'
+import { Main } from 'next/document'
+import { MainMenu } from '@excalidraw/excalidraw'
 
 export function Canvas() {
   const { vaultPath, currentFile } = useVaultStore()
@@ -169,29 +171,19 @@ export function Canvas() {
       <div className="flex-1 relative overflow-hidden bg-background" style={{ minHeight: 0 }}>
         {canvasData && (
           <div className="h-full w-full excalidraw-container">
-            <Excalidraw
-              initialData={{
-                elements: canvasData.elements || [],
-                appState: (() => {
-                  // Create clean appState without collaborators
-                  const { collaborators, ...cleanAppState } = canvasData.appState || {}
-                  return {
-                    ...cleanAppState,
-                    theme: cleanAppState.theme || theme,
-                  }
-                })(),
-              }}
-              onChange={handleChange}
-              theme={theme}
-              UIOptions={{
-                canvasActions: {
-                  saveToActiveFile: false,
-                  loadScene: false,
-                  export: false,
-                  toggleTheme: true,
-                },
-              }}
-            />
+            <Excalidraw>
+              <MainMenu>
+                <MainMenu.DefaultItems.Export/>
+                <MainMenu.DefaultItems.CommandPalette/>
+                <MainMenu.DefaultItems.SearchMenu/>
+                <MainMenu.DefaultItems.SaveAsImage/>
+                <MainMenu.Separator/>
+                <MainMenu.DefaultItems.ClearCanvas/>
+                <MainMenu.DefaultItems.ChangeCanvasBackground/>
+                <MainMenu.DefaultItems.ToggleTheme/>
+                <MainMenu.DefaultItems.Help/>
+              </MainMenu>
+            </Excalidraw>
           </div>
         )}
       </div>
