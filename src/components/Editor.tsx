@@ -6,7 +6,6 @@ import StarterKit from '@tiptap/starter-kit'
 import { useVaultStore } from '@/store/useVaultStore'
 import { readFile, writeFileToVault } from '@/lib/vault'
 import { ScrollArea } from './ui/scroll-area'
-import { EditorToolbar } from './EditorToolbar'
 import { SlashMenu } from './SlashMenu'
 import { marked } from 'marked'
 import TurndownService from 'turndown'
@@ -20,6 +19,7 @@ export function Editor() {
   const [slashQuery, setSlashQuery] = useState('')
   const editorRef = useRef<HTMLDivElement>(null)
   const [slashIndex, setSlashIndex] = useState(-1)
+  const slashMenuOpenRef = useRef(false)
   const turndownService = useState(() => new TurndownService())[0]
 
   const editor = useEditor({
@@ -31,6 +31,15 @@ export function Editor() {
     editorProps: {
       attributes: {
         class: 'prose prose-sm max-w-none focus:outline-none min-h-[400px] p-8',
+      },
+      handleKeyDown: (view, event) => {
+        // Intercept Enter key when slash menu is open
+        if (slashMenuOpenRef.current && event.key === 'Enter') {
+          event.preventDefault()
+          event.stopPropagation()
+          return true
+        }
+        return false
       },
     },
   })
@@ -66,7 +75,7 @@ export function Editor() {
         
         // Clear editor and set new content
         editor.commands.clearContent()
-        editor.commands.setContent(htmlContent, false, { emitUpdate: false })
+        editor.commands.setContent(htmlContent, false)
         console.log('✓ Editor content set')
       } catch (error) {
         console.error('✗ Error loading file:', error)
@@ -75,7 +84,7 @@ export function Editor() {
         marked.setOptions({ breaks: true, gfm: true })
         const defaultContent = marked.parse(defaultMd) as string
         editor.commands.clearContent()
-        editor.commands.setContent(defaultContent, false, { emitUpdate: false })
+        editor.commands.setContent(defaultContent, false)
       } finally {
         setIsLoading(false)
       }
@@ -109,6 +118,7 @@ export function Editor() {
             left: coords.left,
           })
           setShowSlashMenu(true)
+          slashMenuOpenRef.current = true
           setSlashQuery('')
         }, 10)
       } else if (textBeforeCursor.startsWith('/') && 
@@ -127,6 +137,7 @@ export function Editor() {
       } else if (!textBeforeCursor.startsWith('/') && showSlashMenu) {
         // Hide menu if we're no longer in slash mode
         setShowSlashMenu(false)
+        slashMenuOpenRef.current = false
         setSlashMenuPosition(null)
       }
     }
@@ -197,7 +208,6 @@ export function Editor() {
             {isSaving && <span className="text-xs text-muted-foreground">Saving...</span>}
           </div>
         </div>
-        <EditorToolbar editor={editor} />
         <ScrollArea className="flex-1">
           <EditorContent editor={editor} className="h-full" />
         </ScrollArea>
@@ -207,6 +217,7 @@ export function Editor() {
           editor={editor}
           onClose={() => {
             setShowSlashMenu(false)
+            slashMenuOpenRef.current = false
             setSlashMenuPosition(null)
           }}
           position={slashMenuPosition}
