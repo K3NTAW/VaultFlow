@@ -1,4 +1,4 @@
-import { readDir, readTextFile, writeTextFile, remove } from '@tauri-apps/plugin-fs'
+import { readDir, readTextFile, writeTextFile, remove, mkdir } from '@tauri-apps/plugin-fs'
 
 export interface FileEntry {
   name: string
@@ -87,6 +87,7 @@ export async function readFile(vaultPath: string, relativePath: string): Promise
 
 /**
  * Write a text file to the vault
+ * Creates parent directories if they don't exist
  */
 export async function writeFileToVault(
   vaultPath: string,
@@ -94,8 +95,47 @@ export async function writeFileToVault(
   content: string
 ): Promise<void> {
   const fullPath = await getFullPath(vaultPath, relativePath)
+  console.log('Writing file:', { vaultPath, relativePath, fullPath })
+  
   try {
+    // Get the directory path (parent of the file)
+    const pathParts = fullPath.split(/[/\\]/)
+    const fileName = pathParts.pop()
+    const dirPath = pathParts.join(pathParts[0]?.includes('\\') ? '\\' : '/')
+    
+    // Try to create parent directories if they don't exist
+    // Note: Tauri v2 mkdir might not support recursive option the same way
+    if (dirPath && dirPath !== vaultPath) {
+      try {
+        // Try recursive first (if supported)
+        await mkdir(dirPath, { recursive: true }).catch(async (err) => {
+          // If recursive doesn't work, create directories one by one
+          console.log('Recursive mkdir failed, trying manual creation:', err)
+          const parts = dirPath.replace(vaultPath, '').split(/[/\\]/).filter(Boolean)
+          let currentPath = vaultPath
+          for (const part of parts) {
+            currentPath = currentPath + (currentPath.includes('\\') ? '\\' : '/') + part
+            try {
+              await mkdir(currentPath)
+            } catch (e) {
+              // Ignore if already exists
+              if (!(e instanceof Error && (e.message.includes('exists') || e.message.includes('EEXIST')))) {
+                throw e
+              }
+            }
+          }
+        })
+      } catch (mkdirError) {
+        // Ignore error if directory already exists
+        if (!(mkdirError instanceof Error && (mkdirError.message.includes('exists') || mkdirError.message.includes('EEXIST')))) {
+          console.warn('Could not create directory:', mkdirError)
+        }
+      }
+    }
+    
+    console.log('Calling writeTextFile...')
     await writeTextFile(fullPath, content)
+    console.log('File written successfully')
   } catch (error) {
     console.error('Error writing file:', error)
     throw error
