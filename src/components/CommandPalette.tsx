@@ -153,6 +153,16 @@ export function CommandPalette() {
         setTerminalVisible(true)
       },
     },
+    {
+      id: 'toggle-ai',
+      name: 'Toggle AI Assistant',
+      shortcut: ['i'],
+      keywords: 'ai assistant panel',
+      perform: () => {
+        const { aiPanelVisible, setAIPanelVisible } = useNavStore.getState()
+        setAIPanelVisible(!aiPanelVisible)
+      },
+    },
   ]
 
   return (

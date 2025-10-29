@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAIStore } from '@/store/useAIStore'
 import { useVaultStore } from '@/store/useVaultStore'
+import { useNavStore } from '@/store/useNavStore'
 import { queryVault, initializeAI } from '@/lib/ai'
 import { ScrollArea } from './ui/scroll-area'
 import { Input } from './ui/input'
@@ -10,6 +11,7 @@ import { Button } from './ui/button'
 import { Separator } from './ui/separator'
 
 export function AIPanel() {
+  const { setAIPanelVisible } = useNavStore()
   const { vaultPath } = useVaultStore()
   const { messages, addMessage, clearMessages, isProcessing, setIsProcessing } = useAIStore()
   const [query, setQuery] = useState('')
@@ -75,16 +77,26 @@ export function AIPanel() {
     <div className="w-80 border-l border-border flex flex-col bg-background">
       <div className="h-12 border-b border-border flex items-center justify-between px-4">
         <h2 className="text-sm font-semibold">AI Assistant</h2>
-        {messages.length > 0 && (
+        <div className="flex items-center gap-2">
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearMessages}
+              className="text-xs"
+            >
+              Clear
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
-            onClick={clearMessages}
+            onClick={() => setAIPanelVisible(false)}
             className="text-xs"
           >
-            Clear
+            ×
           </Button>
-        )}
+        </div>
       </div>
 
       <ScrollArea className="flex-1">

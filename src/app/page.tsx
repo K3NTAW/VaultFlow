@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useVaultStore } from '@/store/useVaultStore'
+import { useNavStore } from '@/store/useNavStore'
 import { Sidebar } from '@/components/Sidebar'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { TerminalNav } from '@/components/TerminalNav'
@@ -17,6 +18,20 @@ const CommandPalette = dynamic(() => import('@/components/CommandPalette'), {
 
 export default function Home() {
   const { vaultPath, setVaultPath, currentFile, setCurrentFile } = useVaultStore()
+  const { aiPanelVisible, setAIPanelVisible } = useNavStore()
+
+  useEffect(() => {
+    // Keyboard shortcut for AI panel (Cmd/Ctrl+I)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+        e.preventDefault()
+        setAIPanelVisible(!aiPanelVisible)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [aiPanelVisible, setAIPanelVisible])
 
   useEffect(() => {
     // Check if vault is already set
@@ -49,8 +64,19 @@ export default function Home() {
   return (
     <div className="h-screen w-screen flex flex-col bg-background">
       {/* Top Bar with Breadcrumbs */}
-      <div className="h-12 border-b border-border flex items-center px-4 gap-4">
+      <div className="h-12 border-b border-border flex items-center justify-between px-4 gap-4">
         <Breadcrumbs />
+        <div className="flex items-center gap-2">
+          {!aiPanelVisible && (
+            <button
+              onClick={() => setAIPanelVisible(true)}
+              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent"
+              title="Open AI Assistant (Cmd+I)"
+            >
+              AI
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Terminal Navigation (Toggleable) */}
@@ -72,8 +98,8 @@ export default function Home() {
           )}
         </main>
 
-        {/* Right AI Panel */}
-        <AIPanel />
+        {/* Right AI Panel (Toggleable) */}
+        {aiPanelVisible && <AIPanel />}
       </div>
       <CommandPalette />
     </div>

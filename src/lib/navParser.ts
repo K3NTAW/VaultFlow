@@ -1,6 +1,7 @@
 import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
 import { readDirectory, isDirectory, isNote, isCanvas, getFullPath } from './vault'
+import { mkdir, writeTextFile } from '@tauri-apps/plugin-fs'
 
 export interface CommandResult {
   output: string
@@ -18,7 +19,33 @@ export async function parseCommand(
     return { output: 'No vault selected. Please select a vault first.', error: true }
   }
 
-  const parts = input.trim().split(/\s+/)
+  // Parse command and args, handling quoted strings for paths with spaces
+  const parts: string[] = []
+  let current = ''
+  let inQuotes = false
+  let quoteChar = ''
+  
+  for (let i = 0; i < input.trim().length; i++) {
+    const char = input[i]
+    if ((char === '"' || char === "'") && !inQuotes) {
+      inQuotes = true
+      quoteChar = char
+    } else if (char === quoteChar && inQuotes) {
+      inQuotes = false
+      quoteChar = ''
+    } else if (char === ' ' && !inQuotes) {
+      if (current) {
+        parts.push(current)
+        current = ''
+      }
+    } else {
+      current += char
+    }
+  }
+  if (current) {
+    parts.push(current)
+  }
+  
   const command = parts[0]?.toLowerCase()
   const args = parts.slice(1)
 
@@ -39,11 +66,19 @@ export async function parseCommand(
     case 'pwd':
       return { output: useNavStore.getState().currentPath }
     
+    case 'mkdir':
+      return await handleMkdir(vaultPath, args)
+    
+    case 'touch':
+      return await handleTouch(vaultPath, args)
+    
     case 'help':
       return {
         output: `Available commands:
 ls [path]        - List files and directories
 cd <path>        - Change directory (use ".." to go up, "/" for root)
+mkdir <name>     - Create a new directory
+touch <file>     - Create a new file
 open <file>      - Open a note or canvas
 clear            - Clear terminal output
 pwd              - Show current path
@@ -68,14 +103,14 @@ async function handleLs(vaultPath: string, args: string[]): Promise<CommandResul
       return { output: 'Directory is empty.' }
     }
 
-    const output = entries
-      .map((entry) => {
-        const icon = entry.isDirectory ? '📁' : isNote(entry.name) ? '📄' : isCanvas(entry.name) ? '🎨' : '📎'
-        return `${icon} ${entry.name}${entry.isDirectory ? '/' : ''}`
-      })
-      .join('\n')
+    // Format like terminal ls: directories first with /, files after
+    const directories = entries.filter(e => e.isDirectory).map(e => e.name + '/')
+    const files = entries.filter(e => !e.isDirectory).map(e => e.name)
+    
+    const allItems = [...directories, ...files]
+    const output = allItems.join('  ')
 
-    return { output }
+    return { output: output || 'Directory is empty.' }
   } catch (error) {
     return {
       output: `Error reading directory: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -90,7 +125,8 @@ async function handleCd(args: string[]): Promise<CommandResult> {
   }
 
   const { currentPath, setCurrentPath } = useNavStore.getState()
-  const targetPath = args[0]
+  // Join args in case path has spaces (or was quoted)
+  const targetPath = args.join(' ')
 
   if (targetPath === '/') {
     setCurrentPath('/')
@@ -138,7 +174,8 @@ async function handleOpen(vaultPath: string, args: string[]): Promise<CommandRes
   }
 
   const { currentPath } = useNavStore.getState()
-  const filename = args[0]
+  // Join args in case filename has spaces (or was quoted)
+  const filename = args.join(' ')
   
   // Resolve full relative path
   const relativePath = currentPath === '/' 
@@ -156,6 +193,8 @@ async function handleOpen(vaultPath: string, args: string[]): Promise<CommandRes
     // Check if it's a note or canvas
     if (isNote(filename) || isCanvas(filename)) {
       useVaultStore.getState().setCurrentFile(relativePath)
+      // Refresh sidebar to show the file
+      useVaultStore.getState().refresh()
       return { output: `Opened: ${filename}` }
     }
 
@@ -166,6 +205,67 @@ async function handleOpen(vaultPath: string, args: string[]): Promise<CommandRes
   } catch (error) {
     return {
       output: `Error opening ${filename}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: true,
+    }
+  }
+}
+
+async function handleMkdir(vaultPath: string, args: string[]): Promise<CommandResult> {
+  if (args.length === 0) {
+    return { output: 'Usage: mkdir <foldername>', error: true }
+  }
+
+  const { currentPath } = useNavStore.getState()
+  // Join args in case folder name has spaces (or was quoted)
+  const folderName = args.join(' ')
+  
+  // Resolve full relative path
+  const relativePath = currentPath === '/' 
+    ? folderName 
+    : `${currentPath}/${folderName}`.replace(/\/+/g, '/')
+
+  try {
+    const fullPath = await getFullPath(vaultPath, relativePath)
+    console.log('Creating directory at:', fullPath)
+    await mkdir(fullPath, { recursive: true })
+    // Refresh sidebar
+    useVaultStore.getState().refresh()
+    return { output: `Created directory: ${relativePath}` }
+  } catch (error) {
+    console.error('Mkdir error:', error)
+    return {
+      output: `Error creating directory: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: true,
+    }
+  }
+}
+
+async function handleTouch(vaultPath: string, args: string[]): Promise<CommandResult> {
+  if (args.length === 0) {
+    return { output: 'Usage: touch <filename>', error: true }
+  }
+
+  const { currentPath } = useNavStore.getState()
+  // Join args in case filename has spaces (or was quoted)
+  const fileName = args.join(' ')
+  
+  // Resolve full relative path
+  const relativePath = currentPath === '/' 
+    ? fileName 
+    : `${currentPath}/${fileName}`.replace(/\/+/g, '/')
+
+  try {
+    const fullPath = await getFullPath(vaultPath, relativePath)
+    console.log('Creating file at:', fullPath)
+    // Create empty file (touch creates file if it doesn't exist)
+    await writeTextFile(fullPath, '')
+    // Refresh sidebar
+    useVaultStore.getState().refresh()
+    return { output: `Created file: ${relativePath}` }
+  } catch (error) {
+    console.error('Touch error:', error)
+    return {
+      output: `Error creating file: ${error instanceof Error ? error.message : 'Unknown error'}`,
       error: true,
     }
   }

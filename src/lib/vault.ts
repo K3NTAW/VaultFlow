@@ -44,9 +44,15 @@ export async function readDirectory(vaultPath: string, relativePath: string = ''
         isDirectory: entry.isDirectory ?? false,
       }
 
-      // Recursively read directories
+      // Recursively read directories, but catch errors to continue reading other entries
       if (entry.isDirectory) {
-        fileEntry.children = await readDirectory(vaultPath, entryPath)
+        try {
+          fileEntry.children = await readDirectory(vaultPath, entryPath)
+        } catch (error) {
+          // If we can't read a subdirectory, just skip it and continue
+          console.warn(`Skipping directory ${entryPath}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          // Continue without children
+        }
       }
 
       result.push(fileEntry)
