@@ -158,9 +158,60 @@
   margin: 1em 0;
 }
 
-.ProseMirror pre code {
-  background: none;
-  padding: 0;
+  .ProseMirror pre code {
+    background: none;
+    padding: 0;
+  }
+
+/* Excalidraw Canvas Styles */
+.excalidraw-container {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.excalidraw-container .excalidraw-wrapper {
+  width: 100% !important;
+  height: 100% !important;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.excalidraw-container .excalidraw {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Fix toolbar and UI elements */
+.excalidraw-container .ToolIcon {
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+}
+
+.excalidraw-container .ToolIcon:hover {
+  background-color: hsl(var(--accent));
+}
+
+.excalidraw-container button {
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+}
+
+/* Ensure proper sizing */
+.excalidraw-container [class*="App-menu"] {
+  border-radius: 0.5rem;
+}
+
+/* Theme-aware adjustments */
+.dark .excalidraw-container {
+  --color-primary: hsl(var(--primary));
+}
+
+/* Fix any overflow issues */
+.excalidraw-container * {
+  box-sizing: border-box;
 }
 
 /* Task List Styles */
