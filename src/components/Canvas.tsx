@@ -23,18 +23,29 @@ export function Canvas() {
   const [isLoading, setIsLoading] = useState(true)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
-  // Detect system theme
+  // Detect app theme (based on dark class on html/body element)
   useEffect(() => {
     const checkTheme = () => {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      // Check if document has dark class (Tailwind class-based dark mode)
+      const isDark = document.documentElement.classList.contains('dark') || 
+                     document.body.classList.contains('dark')
       setTheme(isDark ? 'dark' : 'light')
     }
     
     checkTheme()
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    mediaQuery.addEventListener('change', checkTheme)
     
-    return () => mediaQuery.removeEventListener('change', checkTheme)
+    // Watch for class changes on the document root
+    const observer = new MutationObserver(checkTheme)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+    
+    return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
