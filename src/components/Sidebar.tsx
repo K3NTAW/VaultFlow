@@ -52,26 +52,27 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
             <div
               onClick={() => handleClick(entry)}
               className={cn(
-                'flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer rounded-md transition-colors',
-                'hover:bg-accent',
-                isSelected && 'bg-accent font-medium',
+                'flex items-center gap-3 px-3 py-2 text-sm cursor-pointer rounded-lg transition-all duration-150',
+                'hover:bg-accent/70',
+                isSelected && 'bg-accent font-medium text-foreground',
+                !isSelected && 'text-muted-foreground hover:text-foreground',
                 level > 0 && 'pl-6'
               )}
-              style={{ paddingLeft: `${12 + level * 16}px` }}
+              style={{ paddingLeft: `${12 + level * 20}px` }}
             >
               {entry.isDirectory ? (
                 <>
-                  <span className="text-xs select-none">
+                  <span className="text-base select-none flex-shrink-0">
                     {isExpanded ? '📂' : '📁'}
                   </span>
-                  <span className="flex-1 truncate">{entry.name}</span>
+                  <span className="flex-1 truncate font-medium">{entry.name}</span>
                 </>
               ) : (
                 <>
-                  <span className="text-xs">
+                  <span className="text-base flex-shrink-0">
                     {isNote(entry.name) ? '📄' : isCanvas(entry.name) ? '🎨' : '📎'}
                   </span>
-                  <span className="flex-1 truncate">{entry.name}</span>
+                  <span className="flex-1 truncate">{entry.name.replace(/\.(md|excalidraw\.json)$/, '')}</span>
                 </>
               )}
             </div>
@@ -117,16 +118,16 @@ export function Sidebar() {
   }
 
   return (
-    <div className="w-64 border-r border-border flex flex-col">
-      <div className="h-12 border-b border-border flex items-center px-4">
-        <h2 className="text-sm font-semibold">Vault</h2>
+    <div className="w-64 border-r border-border/60 bg-sidebar flex flex-col">
+      <div className="h-14 border-b border-border/60 flex items-center px-5 bg-sidebar/50">
+        <h2 className="text-sm font-semibold text-foreground">Vault</h2>
       </div>
       <ScrollArea className="flex-1">
         <div className="p-2">
           {isLoading ? (
-            <div className="text-sm text-muted-foreground p-4">Loading...</div>
+            <div className="text-sm text-muted-foreground p-6 text-center">Loading...</div>
           ) : tree.length === 0 ? (
-            <div className="text-sm text-muted-foreground p-4">
+            <div className="text-sm text-muted-foreground p-6 text-center">
               Vault is empty. Create a note or canvas to get started.
             </div>
           ) : (

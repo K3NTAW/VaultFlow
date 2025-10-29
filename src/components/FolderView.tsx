@@ -45,29 +45,34 @@ export function FolderView() {
 
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
+      <div className="h-full flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-border border-t-primary mx-auto mb-3"></div>
+          <p className="text-sm text-muted-foreground">Loading folder...</p>
+        </div>
       </div>
     )
   }
 
   if (items.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground mb-2">This folder is empty</p>
-          <p className="text-sm text-muted-foreground/60">Create a note or canvas to get started</p>
+      <div className="h-full flex items-center justify-center bg-background">
+        <div className="text-center max-w-md px-8">
+          <div className="text-6xl mb-4">📁</div>
+          <h3 className="text-lg font-semibold text-foreground mb-2">This folder is empty</h3>
+          <p className="text-sm text-muted-foreground">Create a note or canvas to get started</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="h-full p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
+    <div className="h-full bg-background">
+      <div className="max-w-7xl mx-auto px-12 py-10">
+        {/* Header */}
+        <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold mb-1">
+            <h1 className="text-3xl font-semibold mb-2 text-foreground">
               {currentPath ? currentPath.split('/').pop() : 'Vault'}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -77,7 +82,6 @@ export function FolderView() {
           {currentPath && (
             <button
               onClick={() => {
-                // Navigate back to parent or root
                 const pathParts = currentPath.split('/').filter(Boolean)
                 if (pathParts.length > 0) {
                   pathParts.pop()
@@ -88,50 +92,80 @@ export function FolderView() {
                   setCurrentFile(null)
                 }
               }}
-              className="text-sm text-muted-foreground hover:text-foreground px-3 py-1.5 rounded hover:bg-accent transition-colors"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-md hover:bg-accent transition-all font-medium"
             >
-              ← Back
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="mr-1">
+                <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Back
             </button>
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {/* Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
           {items.map((item) => {
             const isFolder = item.isDirectory
             const isNoteFile = isNote(item.name)
             const isCanvasFile = isCanvas(item.name)
+            
+            // Get file name without extension for display
+            const displayName = item.name.replace(/\.(md|excalidraw\.json)$/, '')
+            const itemCount = isFolder && item.children ? item.children.length : null
 
             return (
               <button
                 key={item.path}
                 onClick={() => handleClick(item)}
                 className={cn(
-                  'group relative flex flex-col items-start p-4 rounded-lg border border-border',
-                  'hover:border-primary/50 hover:bg-accent/50 transition-all',
-                  'text-left'
+                  'group relative flex flex-col p-5 rounded-xl border border-border/60',
+                  'bg-card/40 hover:bg-card hover:border-border hover:shadow-md',
+                  'transition-all duration-200 ease-out',
+                  'text-left cursor-pointer'
                 )}
               >
-                <div className="flex items-center gap-3 w-full mb-2">
-                  <span className="text-2xl flex-shrink-0">
-                    {isFolder
-                      ? '📁'
+                {/* Icon */}
+                <div className="mb-4">
+                  <div className={cn(
+                    'w-12 h-12 rounded-lg flex items-center justify-center',
+                    'transition-colors duration-200',
+                    isFolder 
+                      ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400'
                       : isNoteFile
-                        ? '📄'
+                        ? 'bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400'
                         : isCanvasFile
-                          ? '🎨'
-                          : '📎'}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm truncate group-hover:text-primary transition-colors">
-                      {item.name}
-                    </h3>
-                    {isFolder && item.children && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {item.children.length} {item.children.length === 1 ? 'item' : 'items'}
-                      </p>
-                    )}
+                          ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400'
+                          : 'bg-gray-50 dark:bg-gray-950/30 text-gray-600 dark:text-gray-400'
+                  )}>
+                    <span className="text-2xl">
+                      {isFolder ? '📁' : isNoteFile ? '📄' : isCanvasFile ? '🎨' : '📎'}
+                    </span>
                   </div>
                 </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <h3 className={cn(
+                    'font-semibold text-[15px] mb-1 truncate',
+                    'text-foreground group-hover:text-primary',
+                    'transition-colors duration-200'
+                  )}>
+                    {displayName}
+                  </h3>
+                  {itemCount !== null && (
+                    <p className="text-xs text-muted-foreground font-medium">
+                      {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                    </p>
+                  )}
+                  {!isFolder && (
+                    <p className="text-xs text-muted-foreground/70 mt-1 font-mono">
+                      {isNoteFile ? '.md' : isCanvasFile ? '.excalidraw' : ''}
+                    </p>
+                  )}
+                </div>
+
+                {/* Hover indicator */}
+                <div className="absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-primary/20 transition-colors pointer-events-none" />
               </button>
             )
           })}

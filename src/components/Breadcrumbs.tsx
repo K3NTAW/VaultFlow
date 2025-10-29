@@ -24,25 +24,27 @@ export function Breadcrumbs() {
   }
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
       <button
         onClick={() => handleClick(-1)}
         className={cn(
           'text-sm font-medium text-muted-foreground hover:text-foreground transition-colors',
-          'px-2 py-1 rounded hover:bg-accent'
+          'px-2.5 py-1 rounded-md hover:bg-accent/70'
         )}
       >
         Vault
       </button>
       {segments.map((segment, index) => (
-        <div key={index} className="flex items-center gap-2">
-          <span className="text-muted-foreground">/</span>
+        <div key={index} className="flex items-center gap-1.5">
+          <span className="text-muted-foreground/40 text-xs">/</span>
           <button
             onClick={() => handleClick(index)}
             className={cn(
-              'text-sm font-medium text-muted-foreground hover:text-foreground transition-colors',
-              'px-2 py-1 rounded hover:bg-accent',
-              index === segments.length - 1 && currentFile && 'text-foreground font-semibold'
+              'text-sm font-medium transition-colors',
+              'px-2.5 py-1 rounded-md',
+              index === segments.length - 1 && currentFile
+                ? 'text-foreground font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
             )}
           >
             {segment}

@@ -106,7 +106,7 @@ export function Editor() {
     immediatelyRender: false, // Fix SSR warning
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none focus:outline-none min-h-[400px] p-8',
+        class: 'prose prose-sm max-w-none focus:outline-none min-h-[400px]',
       },
       handleKeyDown: (view, event) => {
         // Intercept Enter key when slash menu is open
@@ -292,82 +292,120 @@ export function Editor() {
 
   return (
     <>
-      <div ref={editorContainerRef} className="h-full flex flex-col relative">
-        <div className="border-b border-border px-4 py-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">{currentFile}</h2>
+      <div ref={editorContainerRef} className="h-full flex flex-col relative bg-background">
+        <div className="border-b border-border/60 px-6 py-3 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <h2 className="text-sm font-medium text-muted-foreground truncate max-w-md">
+            {currentFile?.replace(/\.md$/, '')}
+          </h2>
           <div className="flex items-center gap-4">
             {editor && (
-              <span className="text-xs text-muted-foreground">
-                {editor.storage.characterCount.characters()} chars / {editor.storage.characterCount.words()} words
+              <span className="text-xs text-muted-foreground font-medium">
+                {editor.storage.characterCount.characters().toLocaleString()} chars · {editor.storage.characterCount.words().toLocaleString()} words
               </span>
             )}
-            {isLoading && <span className="text-xs text-muted-foreground">Loading...</span>}
-            {isSaving && <span className="text-xs text-muted-foreground">Saving...</span>}
+            {isLoading && (
+              <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
+            )}
+            {isSaving && (
+              <span className="text-xs text-muted-foreground">Saving...</span>
+            )}
           </div>
         </div>
-        <ScrollArea className="flex-1">
-          <div className="relative">
-            <EditorContent editor={editor} className="h-full" />
-            <BlockControls editor={editor} />
+        <ScrollArea className="flex-1 bg-background">
+          <div className="relative min-h-full">
+            <div className="max-w-4xl mx-auto px-16 py-12">
+              <EditorContent editor={editor} className="h-full" />
+              <BlockControls editor={editor} />
+            </div>
             
             {/* Bubble Menu - Shows when text is selected */}
             {editor && (
               <BubbleMenu
                 editor={editor}
-                className="flex items-center gap-1 bg-background border border-border rounded-md shadow-lg p-1"
+                className="flex items-center gap-0.5 bg-background/95 backdrop-blur-sm border border-border/60 rounded-lg shadow-xl p-1.5"
               >
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => editor.chain().focus().toggleBold().run()}
-                  className={cn('h-8 w-8 p-0', editor.isActive('bold') && 'bg-accent')}
-                  title="Bold"
+                  className={cn(
+                    'h-8 w-8 p-0 transition-all',
+                    editor.isActive('bold') 
+                      ? 'bg-accent text-foreground' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
+                  title="Bold (Cmd+B)"
                 >
-                  <span className="font-bold text-xs">B</span>
+                  <span className="font-bold text-sm">B</span>
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => editor.chain().focus().toggleItalic().run()}
-                  className={cn('h-8 w-8 p-0', editor.isActive('italic') && 'bg-accent')}
-                  title="Italic"
+                  className={cn(
+                    'h-8 w-8 p-0 transition-all',
+                    editor.isActive('italic') 
+                      ? 'bg-accent text-foreground' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
+                  title="Italic (Cmd+I)"
                 >
-                  <span className="italic text-xs">I</span>
+                  <span className="italic text-sm">I</span>
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => editor.chain().focus().toggleUnderline().run()}
-                  className={cn('h-8 w-8 p-0', editor.isActive('underline') && 'bg-accent')}
-                  title="Underline"
+                  className={cn(
+                    'h-8 w-8 p-0 transition-all',
+                    editor.isActive('underline') 
+                      ? 'bg-accent text-foreground' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
+                  title="Underline (Cmd+U)"
                 >
-                  <span className="underline text-xs">U</span>
+                  <span className="underline text-sm">U</span>
                 </Button>
-                <div className="w-px h-6 bg-border mx-1" />
+                <div className="w-px h-6 bg-border/60 mx-0.5" />
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => editor.chain().focus().toggleStrike().run()}
-                  className={cn('h-8 w-8 p-0', editor.isActive('strike') && 'bg-accent')}
+                  className={cn(
+                    'h-8 w-8 p-0 transition-all',
+                    editor.isActive('strike') 
+                      ? 'bg-accent text-foreground' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
                   title="Strikethrough"
                 >
-                  <span className="line-through text-xs">S</span>
+                  <span className="line-through text-sm">S</span>
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => editor.chain().focus().toggleCode().run()}
-                  className={cn('h-8 w-8 p-0 font-mono text-xs', editor.isActive('code') && 'bg-accent')}
+                  className={cn(
+                    'h-8 w-8 p-0 font-mono text-xs transition-all',
+                    editor.isActive('code') 
+                      ? 'bg-accent text-foreground' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
                   title="Code"
                 >
                   {'</>'}
                 </Button>
-                <div className="w-px h-6 bg-border mx-1" />
+                <div className="w-px h-6 bg-border/60 mx-0.5" />
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => editor.chain().focus().toggleSubscript().run()}
-                  className={cn('h-8 w-8 p-0 text-xs', editor.isActive('subscript') && 'bg-accent')}
+                  className={cn(
+                    'h-8 w-8 p-0 text-xs transition-all',
+                    editor.isActive('subscript') 
+                      ? 'bg-accent text-foreground' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
                   title="Subscript"
                 >
                   x<sub className="text-[0.6em]">2</sub>
@@ -376,12 +414,17 @@ export function Editor() {
                   variant="ghost"
                   size="sm"
                   onClick={() => editor.chain().focus().toggleSuperscript().run()}
-                  className={cn('h-8 w-8 p-0 text-xs', editor.isActive('superscript') && 'bg-accent')}
+                  className={cn(
+                    'h-8 w-8 p-0 text-xs transition-all',
+                    editor.isActive('superscript') 
+                      ? 'bg-accent text-foreground' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
                   title="Superscript"
                 >
                   x<sup className="text-[0.6em]">2</sup>
                 </Button>
-                <div className="w-px h-6 bg-border mx-1" />
+                <div className="w-px h-6 bg-border/60 mx-0.5" />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -391,8 +434,13 @@ export function Editor() {
                       editor.chain().focus().setLink({ href: url }).run()
                     }
                   }}
-                  className={cn('h-8 w-8 p-0', editor.isActive('link') && 'bg-accent')}
-                  title="Link"
+                  className={cn(
+                    'h-8 w-8 p-0 transition-all',
+                    editor.isActive('link') 
+                      ? 'bg-accent text-foreground' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  )}
+                  title="Link (Cmd+K)"
                 >
                   🔗
                 </Button>

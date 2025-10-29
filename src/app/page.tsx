@@ -70,14 +70,16 @@ export default function Home() {
   return (
     <div className="h-screen w-screen flex flex-col bg-background">
       {/* Top Bar with Breadcrumbs */}
-      <div className="h-12 border-b border-border flex items-center justify-between px-4 gap-4">
-        <div className="flex items-center gap-4">
+      <div className="h-14 border-b border-border/60 flex items-center justify-between px-6 gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarVisible(!sidebarVisible)}
-            className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent"
+            className="text-muted-foreground hover:text-foreground p-1.5 rounded-md hover:bg-accent transition-colors"
             title="Toggle Sidebar (Cmd+B)"
           >
-            ☰
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+              <path d="M2 4H14M2 8H14M2 12H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
           </button>
           <Breadcrumbs />
         </div>
@@ -85,7 +87,7 @@ export default function Home() {
           {!aiPanelVisible && (
             <button
               onClick={() => setAIPanelVisible(true)}
-              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-accent transition-colors"
               title="Open AI Assistant (Cmd+I)"
             >
               AI
