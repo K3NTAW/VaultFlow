@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useState, useRef } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
-import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus'
+import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
@@ -397,81 +397,6 @@ export function Editor() {
                   🔗
                 </Button>
               </BubbleMenu>
-            )}
-
-            {/* Floating Menu - Shows on empty lines */}
-            {editor && (
-              <FloatingMenu
-                editor={editor}
-                className="flex items-center gap-1 bg-background border border-border rounded-md shadow-lg p-1"
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                  className={cn('h-8 px-2 text-xs', editor.isActive('heading', { level: 1 }) && 'bg-accent')}
-                >
-                  H1
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                  className={cn('h-8 px-2 text-xs', editor.isActive('heading', { level: 2 }) && 'bg-accent')}
-                >
-                  H2
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                  className={cn('h-8 px-2 text-xs', editor.isActive('heading', { level: 3 }) && 'bg-accent')}
-                >
-                  H3
-                </Button>
-                <div className="w-px h-6 bg-border mx-1" />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => editor.chain().focus().toggleBulletList().run()}
-                  className={cn('h-8 px-2 text-xs', editor.isActive('bulletList') && 'bg-accent')}
-                >
-                  •
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                  className={cn('h-8 px-2 text-xs', editor.isActive('orderedList') && 'bg-accent')}
-                >
-                  1.
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => editor.chain().focus().toggleTaskList().run()}
-                  className={cn('h-8 px-2 text-xs', editor.isActive('taskList') && 'bg-accent')}
-                >
-                  ☑
-                </Button>
-                <div className="w-px h-6 bg-border mx-1" />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                  className={cn('h-8 px-2 text-xs', editor.isActive('blockquote') && 'bg-accent')}
-                >
-                  "
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                  className={cn('h-8 px-2 text-xs font-mono', editor.isActive('codeBlock') && 'bg-accent')}
-                >
-                  {'{}'}
-                </Button>
-              </FloatingMenu>
             )}
           </div>
         </ScrollArea>

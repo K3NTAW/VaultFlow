@@ -17,20 +17,26 @@ const CommandPalette = dynamic(() => import('@/components/CommandPalette'), {
 
 export default function Home() {
   const { vaultPath, setVaultPath, currentFile, setCurrentFile } = useVaultStore()
-  const { aiPanelVisible, setAIPanelVisible } = useNavStore()
+  const { aiPanelVisible, setAIPanelVisible, sidebarVisible, setSidebarVisible } = useNavStore()
 
   useEffect(() => {
-    // Keyboard shortcut for AI panel (Cmd/Ctrl+I)
+    // Keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl+I for AI panel
       if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
         e.preventDefault()
         setAIPanelVisible(!aiPanelVisible)
+      }
+      // Cmd/Ctrl+B for sidebar
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault()
+        setSidebarVisible(!sidebarVisible)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [aiPanelVisible, setAIPanelVisible])
+  }, [aiPanelVisible, setAIPanelVisible, sidebarVisible, setSidebarVisible])
 
   useEffect(() => {
     // Check if vault is already set
@@ -64,7 +70,16 @@ export default function Home() {
     <div className="h-screen w-screen flex flex-col bg-background">
       {/* Top Bar with Breadcrumbs */}
       <div className="h-12 border-b border-border flex items-center justify-between px-4 gap-4">
-        <Breadcrumbs />
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setSidebarVisible(!sidebarVisible)}
+            className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent"
+            title="Toggle Sidebar (Cmd+B)"
+          >
+            ☰
+          </button>
+          <Breadcrumbs />
+        </div>
         <div className="flex items-center gap-2">
           {!aiPanelVisible && (
             <button
@@ -81,7 +96,7 @@ export default function Home() {
       {/* Main Content Area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
-        <Sidebar />
+        {sidebarVisible && <Sidebar />}
 
         {/* Editor/Canvas Area */}
         <main className="flex-1 overflow-auto">
