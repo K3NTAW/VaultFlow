@@ -1,4 +1,4 @@
-import { readDir, readTextFile, writeTextFile, remove, mkdir } from '@tauri-apps/plugin-fs'
+import { readDir, readTextFile, writeTextFile, remove, mkdir, copyFile } from '@tauri-apps/plugin-fs'
 
 export interface FileEntry {
   name: string
@@ -188,5 +188,33 @@ export function isNote(filename: string): boolean {
  */
 export function isCanvas(filename: string): boolean {
   return filename.endsWith('.excalidraw.json')
+}
+
+/**
+ * Export a file to a user-selected location
+ */
+export async function exportFile(
+  vaultPath: string,
+  relativePath: string
+): Promise<void> {
+  const { save } = await import('@tauri-apps/plugin-dialog')
+  const fullPath = await getFullPath(vaultPath, relativePath)
+  
+  // Determine default filename
+  const fileName = relativePath.split('/').pop() || 'export'
+  
+  try {
+    const destination = await save({
+      defaultPath: fileName,
+      title: 'Export File',
+    })
+    
+    if (destination && typeof destination === 'string') {
+      await copyFile(fullPath, destination)
+    }
+  } catch (error) {
+    console.error('Error exporting file:', error)
+    throw error
+  }
 }
 
