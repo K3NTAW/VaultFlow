@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { motion, AnimatePresence } from 'framer-motion'
-import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, useDroppable, useDraggable } from '@dnd-kit/core'
+import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, useDroppable, useDraggable, DragOverlay } from '@dnd-kit/core'
 
 interface FolderTreeProps {
   entries: FileEntry[]
@@ -39,7 +39,7 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
+function FolderTree({ entries, vaultPath, level = 0, draggedId }: FolderTreeProps & { draggedId?: string | null }) {
   const { currentFile, setCurrentFile, refresh } = useVaultStore()
   const { currentPath, setCurrentPath } = useNavStore()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -126,13 +126,24 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
   }
 
   // dnd-kit helpers for each row
-  const Row = ({ entry, children }: { entry: FileEntry; children: React.ReactNode }) => {
+  const Row = ({ entry, children }: { entry: FileEntry; children: (over: boolean) => React.ReactNode }) => {
     const drag = useDraggable({ id: entry.path, data: { path: entry.path, isDirectory: entry.isDirectory } })
     const drop = useDroppable({ id: `drop:${entry.path}`, data: { path: entry.path, isDirectory: entry.isDirectory } })
     const setBothRefs = (node: HTMLElement | null) => { drag.setNodeRef(node); drop.setNodeRef(node) }
+    // fade/lighten if this is the dragged row
+    const isDragging = draggedId === entry.path
     return (
-      <div ref={setBothRefs} {...drag.listeners} {...drag.attributes} data-over={drop.isOver}>
-        {children}
+      <div
+        ref={setBothRefs}
+        {...drag.listeners}
+        {...drag.attributes}
+        data-over={drop.isOver}
+        style={{
+          opacity: isDragging ? 0.26 : 1,
+          filter: isDragging ? 'blur(1px)' : undefined,
+        }}
+      >
+        {children(drop.isOver)}
       </div>
     )
   }
@@ -150,13 +161,14 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
             onMouseLeave={() => setHovered((h) => (h === entry.path ? null : h))}
           >
             <Row entry={entry}>
+            {(over) => (
             <div
               onClick={() => handleClick(entry)}
               className={cn(
                 'relative flex items-center gap-1.5 pr-2 py-1.5 text-[13px] cursor-pointer rounded-md transition-colors',
                 'hover:bg-[#ebeced] dark:hover:bg-[#202020]',
                 isSelected ? 'bg-[#ebeced] dark:bg-[#202020] text-[#2f3437] dark:text-[#d1d1d1] font-medium' : 'text-[#6b6b6b] dark:text-[#a0a0a0]',
-                dragOver === entry.path && 'ring-1 ring-[#9b9b9b] dark:ring-[#3a3a3a]'
+                over && 'bg-[#ebeced] dark:bg-[#202020]'
               )}
               style={{ paddingLeft: `${8 + level * 14}px` }}
             >
@@ -216,6 +228,7 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
                 </DropdownMenu>
               </div>
             </div>
+            )}
             </Row>
             <AnimatePresence initial={false}>
               {entry.isDirectory && isExpanded && hasChildren && (
@@ -229,6 +242,7 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
                     entries={entry.children!}
                     vaultPath={vaultPath}
                     level={level + 1}
+                    draggedId={draggedId}
                   />
                 </motion.div>
               )}
@@ -243,6 +257,7 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
 export function Sidebar() {
   const { vaultPath, refreshTrigger, setCurrentFile, refresh } = useVaultStore()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const [draggedId, setDraggedId] = useState<string | null>(null)
 
   const moveToTarget = async (src: { path: string; isDirectory: boolean }, targetPath: string) => {
     if (src.path === targetPath) return
@@ -268,21 +283,31 @@ export function Sidebar() {
     refresh()
   }
 
+  // Drag and Droppable for root (Vault header)
+  const rootDrop = useDroppable({ id: 'drop:VaultRoot', data: { path: '', isDirectory: true } })
+
   const handleDragEnd = async (event: DragEndEvent) => {
+    setDraggedId(null)
     const { active, over } = event
     if (!over) return
     const src = active.data.current as { path: string; isDirectory: boolean } | undefined
     const overData = over.data.current as { path: string; isDirectory: boolean } | undefined
     if (!src) return
-    // Dropping onto a folder row uses droppable id `drop:<path>`
     const overId = String(over.id)
-    if (overId.startsWith('drop:') && overData && overData.isDirectory) {
-      const targetPath = overData.path
-      await moveToTarget(src, targetPath)
+    if (overId === 'drop:VaultRoot') {
+      await moveToTarget(src, '')
       return
     }
-    // Dropping anywhere else (e.g., header root) if we made it droppable elsewhere
+    if (overId.startsWith('drop:') && overData && overData.isDirectory) {
+      await moveToTarget(src, overData.path)
+      return
+    }
   }
+
+  const handleDragStart = (event: any) => {
+    setDraggedId(event.active.id as string)
+  }
+
   const [tree, setTree] = useState<FileEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [query, setQuery] = useState('')
@@ -370,37 +395,11 @@ export function Sidebar() {
       transition={{ duration: 0.15 }}
     >
       <div
-        className="flex items-center px-3 py-3 border-b border-[#e2e3e4] dark:border-[#2a2a2a]"
-        onDragOver={(e) => { e.preventDefault(); }}
-        onDrop={async (e) => {
-          try {
-            const data = e.dataTransfer.getData('application/json')
-            if (!data) return
-            const src = JSON.parse(data) as { path: string; isDirectory: boolean }
-            const base = src.path.split('/').pop() as string
-            const targetEntries = await readDirectory(vaultPath, '')
-            const existing = new Set(targetEntries.map((t) => t.name))
-            let name = base
-            if (existing.has(name)) {
-              const ext = src.isDirectory ? '' : (name.includes('.') ? '.' + name.split('.').pop() : '')
-              const stem = src.isDirectory ? name : name.replace(new RegExp(`${ext.replace('.', '\\.')}$`), '')
-              let idx = 1
-              let candidate = `${stem} ${idx}${ext}`
-              while (existing.has(candidate)) { idx++; candidate = `${stem} ${idx}${ext}` }
-              name = candidate
-            }
-            const newRelative = name
-            if (newRelative !== src.path) {
-              await renameFile(vaultPath, src.path, newRelative)
-              if (useVaultStore.getState().currentFile === src.path) useVaultStore.getState().setCurrentFile(newRelative)
-              if (useNavStore.getState().currentPath === src.path) useNavStore.getState().setCurrentPath(newRelative)
-              refresh()
-            }
-          } catch (err) {
-            console.error('Move to root failed', err)
-            alert('Failed to move item to root')
-          }
-        }}
+        ref={rootDrop.setNodeRef}
+        className={cn(
+          'flex items-center px-3 py-3 border-b border-[#e2e3e4] dark:border-[#2a2a2a]',
+          rootDrop.isOver && 'bg-[#ebeced] dark:bg-[#202020] shadow-sm rounded-md transition-colors'
+        )}
       >
         <div className="text-[14px] font-semibold text-[#2f3437] dark:text-[#e4e4e4] truncate">Vault</div>
       </div>
@@ -428,7 +427,7 @@ export function Sidebar() {
       </div>
 
       <div className="relative flex-1 min-h-0 group/sidebar">
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={handleDragStart} >
         <ScrollArea className="h-full notion-scroll px-2">
           <div className="pb-3">
             {isLoading ? (
@@ -436,10 +435,44 @@ export function Sidebar() {
             ) : filteredTree.length === 0 ? (
               <div className="text-sm text-[#6b6b6b] dark:text-[#a0a0a0] p-4 text-center">No results</div>
             ) : (
-              <FolderTree entries={filteredTree} vaultPath={vaultPath} />
+              <FolderTree entries={filteredTree} vaultPath={vaultPath} draggedId={draggedId} />
             )}
           </div>
         </ScrollArea>
+          <DragOverlay adjustScale dropAnimation={{ duration: 140 }} >
+            {!!draggedId && (() => {
+              // Find in tree
+              function findEntry(entries: FileEntry[], id: string): FileEntry | null {
+                for (const entry of entries) {
+                  if (entry.path === id) return entry
+                  if (entry.children) {
+                    const found = findEntry(entry.children, id)
+                    if (found) return found
+                  }
+                }
+                return null
+              }
+              const entry = findEntry(tree, draggedId as string)
+              if (!entry) return null
+              return (
+                <div
+                  className={cn(
+                    'px-2.5 py-1 rounded-md shadow-sm border text-[12px] leading-[14px]',
+                    'bg-[#f8f9fa] dark:bg-[#232323] text-[#2f3437] dark:text-[#d1d1d1]',
+                    entry.isDirectory ? 'font-medium' : 'font-normal',
+                  )}
+                  style={{ transform: 'scale(0.92)' }}
+                >
+                  <span className="mr-1">
+                    {entry.isDirectory ? '📁' : isNote(entry.name) ? '📄' : isCanvas(entry.name) ? '🎨' : ''}
+                  </span>
+                  <span className="truncate inline-block max-w-[180px] align-middle">
+                    {entry.name.replace(/\.(md|excalidraw\.json)$/, '')}
+                  </span>
+                </div>
+              )
+            })()}
+          </DragOverlay>
         </DndContext>
       </div>
 

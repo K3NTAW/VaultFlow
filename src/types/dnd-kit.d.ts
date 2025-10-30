@@ -5,6 +5,7 @@ declare module '@dnd-kit/core' {
   export const PointerSensor: any
   export const useSensor: any
   export const useSensors: any
+  export const DragOverlay: any
   export type DragEndEvent = any
   export type DragOverEvent = any
 }
