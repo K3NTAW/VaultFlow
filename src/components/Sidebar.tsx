@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
-import { readDirectory, FileEntry, isNote, isCanvas, deleteFile, exportFile, renameFile, writeFileToVault } from '@/lib/vault'
+import { readDirectory, FileEntry, isNote, isCanvas, deleteFile, exportFile, renameFile, writeFileToVault, createDirectoryInVault, deleteEntryRecursive } from '@/lib/vault'
 import { ScrollArea } from './ui/scroll-area'
 import { Separator } from './ui/separator'
 import { cn } from '@/lib/utils'
@@ -88,7 +88,11 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
   const handleDelete = async (entry: FileEntry) => {
     if (!confirm(`Delete "${entry.name}"?`)) return
     try {
-      await deleteFile(vaultPath, entry.path)
+      if (entry.isDirectory) {
+        await deleteEntryRecursive(vaultPath, entry.path)
+      } else {
+        await deleteFile(vaultPath, entry.path)
+      }
       // If we're deleting the current file or path, clear both
       if (currentFile === entry.path) setCurrentFile(null)
       if (currentPath === entry.path) setCurrentPath("")
@@ -339,12 +343,70 @@ export function Sidebar() {
 
       <div className="px-3 py-2 border-t border-[#e2e3e4] dark:border-[#2a2a2a]">
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleNewPage}
-            className="text-sm text-[#6b6b6b] dark:text-[#a0a0a0] hover:text-black dark:hover:text-white transition-colors"
-          >
-            + New Page
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-1.5 rounded-md text-[#6b6b6b] dark:text-[#a0a0a0] hover:bg-[#ebeced] dark:hover:bg-[#202020]" aria-label="Add">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-44">
+              <DropdownMenuItem onClick={handleNewPage}>New Page</DropdownMenuItem>
+              <DropdownMenuItem onClick={async () => {
+                try {
+                  const { currentPath } = useNavStore.getState()
+                  const parentFolder = currentPath ? currentPath : ''
+                  const entries: FileEntry[] = await readDirectory(vaultPath, parentFolder)
+                  const existingFolders = new Set(entries.filter((e) => e.isDirectory).map((e) => e.name))
+                  let idx = 1
+                  let name = 'Untitled'
+                  let folderName = name
+                  while (existingFolders.has(folderName)) {
+                    idx += 1
+                    folderName = `Untitled ${idx}`
+                  }
+                  const relativePath = parentFolder ? `${parentFolder}/${folderName}` : folderName
+                  await createDirectoryInVault(vaultPath, relativePath)
+                  refresh()
+                } catch (e) {
+                  console.error('Failed to create folder', e)
+                  alert('Failed to create folder')
+                }
+              }}>New Folder</DropdownMenuItem>
+              <DropdownMenuItem onClick={async () => {
+                try {
+                  const { currentPath } = useNavStore.getState()
+                  const parentFolder = currentPath ? currentPath : ''
+                  const entries: FileEntry[] = await readDirectory(vaultPath, parentFolder)
+                  const existingFiles = new Set(entries.filter((e) => !e.isDirectory).map((e) => e.name))
+                  let idx = 1
+                  let base = 'Untitled'
+                  let name = base
+                  let fileName = `${name}.excalidraw.json`
+                  while (existingFiles.has(fileName)) {
+                    idx += 1
+                    name = `${base} ${idx}`
+                    fileName = `${name}.excalidraw.json`
+                  }
+                  const relativePath = parentFolder ? `${parentFolder}/${fileName}` : fileName
+                  const content = JSON.stringify({
+                    type: 'excalidraw',
+                    version: 2,
+                    source: 'https://excalidraw.com',
+                    elements: [],
+                    appState: { gridSize: null, viewBackgroundColor: '#ffffff' },
+                  }, null, 2)
+                  await writeFileToVault(vaultPath, relativePath, content)
+                  setCurrentFile(relativePath)
+                  refresh()
+                } catch (e) {
+                  console.error('Failed to create canvas', e)
+                  alert('Failed to create canvas')
+                }
+              }}>New Canvas</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             onClick={() => {
               // placeholder: wire to settings route or modal later

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
-import { readDirectory, FileEntry, isNote, isCanvas, deleteFile, exportFile, renameFile } from '@/lib/vault'
+import { readDirectory, FileEntry, isNote, isCanvas, deleteFile, exportFile, renameFile, deleteEntryRecursive } from '@/lib/vault'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
@@ -14,7 +14,7 @@ import {
 } from './ui/dropdown-menu'
 
 export function FolderView() {
-  const { vaultPath, setCurrentFile, refresh } = useVaultStore()
+  const { vaultPath, setCurrentFile, refresh, refreshTrigger } = useVaultStore()
   const { currentPath, setCurrentPath } = useNavStore()
   const [items, setItems] = useState<FileEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -37,7 +37,7 @@ export function FolderView() {
     }
 
     loadFolder()
-  }, [vaultPath, currentPath])
+  }, [vaultPath, currentPath, refreshTrigger])
 
   const handleClick = (item: FileEntry, e?: React.MouseEvent) => {
     // Don't navigate if clicking on the menu button
@@ -98,7 +98,11 @@ export function FolderView() {
 
     try {
       const filePath = currentPath ? `${currentPath}/${item.name}` : item.name
-      await deleteFile(vaultPath!, filePath)
+      if (item.isDirectory) {
+        await deleteEntryRecursive(vaultPath!, filePath)
+      } else {
+        await deleteFile(vaultPath!, filePath)
+      }
       
       // Clear selection if deleted item was selected
       if (useVaultStore.getState().currentFile === filePath) {

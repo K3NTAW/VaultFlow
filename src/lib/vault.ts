@@ -156,6 +156,42 @@ export async function deleteFile(vaultPath: string, relativePath: string): Promi
 }
 
 /**
+ * Recursively delete a file or directory from the vault.
+ * If it's a directory, remove all children first.
+ */
+export async function deleteEntryRecursive(
+  vaultPath: string,
+  relativePath: string
+): Promise<void> {
+  const fullPath = await getFullPath(vaultPath, relativePath)
+  const separator = fullPath.includes('\\') ? '\\' : '/'
+  try {
+    // Try reading directory; if it fails, treat as file
+    const entries = await readDir(fullPath)
+    // If readDir succeeds, this is a directory; delete children first
+    for (const entry of entries) {
+      // Skip hidden/system files if capability forbids them; we'll rely on recursive remove below
+      if (entry.name.startsWith('.')) continue
+      const childRel = relativePath
+        ? `${relativePath}${separator}${entry.name}`
+        : entry.name
+      await deleteEntryRecursive(vaultPath, childRel)
+    }
+    // Attempt to remove recursively to catch hidden items like .DS_Store
+    // @ts-ignore - recursive option may be supported by plugin-fs
+    await remove(fullPath, { recursive: true })
+  } catch (e) {
+    // Not a directory or cannot read as directory; attempt to remove as file
+    try {
+      await remove(fullPath)
+    } catch (error) {
+      console.error('Error deleting entry:', error)
+      throw error
+    }
+  }
+}
+
+/**
  * Rename a file or directory in the vault
  */
 export async function renameFile(
@@ -233,6 +269,25 @@ export async function exportFile(
   } catch (error) {
     console.error('Error exporting file:', error)
     throw error
+  }
+}
+
+/**
+ * Create a directory inside the vault (recursively)
+ */
+export async function createDirectoryInVault(
+  vaultPath: string,
+  relativePath: string
+): Promise<void> {
+  const fullPath = await getFullPath(vaultPath, relativePath)
+  try {
+    await mkdir(fullPath, { recursive: true })
+  } catch (error) {
+    // Ignore if already exists
+    if (!(error instanceof Error && (error.message.includes('exists') || error.message.includes('EEXIST')))) {
+      console.error('Error creating directory:', error)
+      throw error
+    }
   }
 }
 
