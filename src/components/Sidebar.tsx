@@ -86,7 +86,9 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
   }
 
   const handleDelete = async (entry: FileEntry) => {
-    if (!confirm(`Delete "${entry.name}"?`)) return
+    const { confirm } = await import('@tauri-apps/plugin-dialog')
+    const approved = await confirm(`Delete "${entry.name}"?`, { title: 'Confirm Deletion', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' })
+    if (!approved) return
     try {
       if (entry.isDirectory) {
         await deleteEntryRecursive(vaultPath, entry.path)

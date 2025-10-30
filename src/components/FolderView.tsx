@@ -92,9 +92,9 @@ export function FolderView() {
   }
 
   const handleDelete = async (item: FileEntry) => {
-    if (!confirm(`Are you sure you want to delete "${item.name}"?`)) {
-      return
-    }
+    const { confirm } = await import('@tauri-apps/plugin-dialog')
+    const approved = await confirm(`Delete "${item.name}"?`, { title: 'Confirm Deletion', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Cancel' })
+    if (!approved) return
 
     try {
       const filePath = currentPath ? `${currentPath}/${item.name}` : item.name
