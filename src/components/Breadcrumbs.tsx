@@ -9,13 +9,14 @@ export function Breadcrumbs() {
   const { currentFile } = useVaultStore()
 
   const displayPath = currentFile || currentPath
-  if (!displayPath) {
+if (!displayPath) {
     return (
       <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
         <button
           onClick={() => {
             setCurrentPath('')
-            setCurrentFile(null)
+          const { setCurrentFile } = require('@/store/useVaultStore').useVaultStore.getState()
+          setCurrentFile(null)
           }}
           className={cn(
             'text-sm font-medium text-muted-foreground hover:text-foreground transition-colors',
