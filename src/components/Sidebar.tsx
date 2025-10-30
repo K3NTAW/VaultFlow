@@ -3,10 +3,17 @@
 import { useState, useEffect } from 'react'
 import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
-import { readDirectory, FileEntry, isNote, isCanvas } from '@/lib/vault'
+import { readDirectory, FileEntry, isNote, isCanvas, deleteFile, exportFile, renameFile } from '@/lib/vault'
 import { ScrollArea } from './ui/scroll-area'
 import { Separator } from './ui/separator'
 import { cn } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu'
 
 interface FolderTreeProps {
   entries: FileEntry[]
@@ -15,9 +22,10 @@ interface FolderTreeProps {
 }
 
 function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
-  const { currentFile, setCurrentFile } = useVaultStore()
+  const { currentFile, setCurrentFile, refresh } = useVaultStore()
   const { currentPath, setCurrentPath } = useNavStore()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [hovered, setHovered] = useState<string | null>(null)
 
   const toggleExpand = (path: string) => {
     const newExpanded = new Set(expanded)
@@ -40,6 +48,49 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
     }
   }
 
+  const handleRename = async (entry: FileEntry) => {
+    const base = entry.name.replace(/\.(md|excalidraw\.json)$/, '')
+    const newName = window.prompt('Enter new name:', base)
+    if (!newName || newName.trim() === '' || newName === base) return
+    const sanitized = newName.trim().replace(/[<>:"/\\|?*]/g, '-')
+    const ext = entry.isDirectory ? '' : entry.name.includes('.') ? `.${entry.name.split('.').pop()}` : ''
+    const parent = entry.path.split('/').slice(0, -1).join('/')
+    const oldPath = entry.path
+    const newPath = parent ? `${parent}/${sanitized}${ext}` : `${sanitized}${ext}`
+    try {
+      await renameFile(vaultPath, oldPath, newPath)
+      if (currentFile === oldPath) setCurrentFile(newPath)
+      if (currentPath === oldPath) setCurrentPath(newPath)
+      refresh()
+    } catch (e) {
+      console.error('Rename failed', e)
+      alert('Failed to rename')
+    }
+  }
+
+  const handleDelete = async (entry: FileEntry) => {
+    if (!confirm(`Delete "${entry.name}"?`)) return
+    try {
+      await deleteFile(vaultPath, entry.path)
+      if (currentFile === entry.path) setCurrentFile(null)
+      if (currentPath === entry.path) setCurrentPath('')
+      refresh()
+    } catch (e) {
+      console.error('Delete failed', e)
+      alert('Failed to delete')
+    }
+  }
+
+  const handleExport = async (entry: FileEntry) => {
+    if (entry.isDirectory) return
+    try {
+      await exportFile(vaultPath, entry.path)
+    } catch (e) {
+      console.error('Export failed', e)
+      alert('Failed to export')
+    }
+  }
+
   return (
     <div className="space-y-0.5">
       {entries.map((entry) => {
@@ -48,11 +99,14 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
         const hasChildren = entry.children && entry.children.length > 0
 
         return (
-          <div key={entry.path}>
+          <div key={entry.path}
+            onMouseEnter={() => setHovered(entry.path)}
+            onMouseLeave={() => setHovered((h) => (h === entry.path ? null : h))}
+          >
             <div
               onClick={() => handleClick(entry)}
               className={cn(
-                'flex items-center gap-3 px-3 py-2 text-sm cursor-pointer rounded-lg transition-all duration-150',
+                'relative flex items-center gap-3 px-3 py-2 text-sm cursor-pointer rounded-lg transition-all duration-150',
                 'hover:bg-accent/70',
                 isSelected && 'bg-accent font-medium text-foreground',
                 !isSelected && 'text-muted-foreground hover:text-foreground',
@@ -75,6 +129,49 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
                   <span className="flex-1 truncate">{entry.name.replace(/\.(md|excalidraw\.json)$/, '')}</span>
                 </>
               )}
+
+              {/* Three-dot menu */}
+              <div
+                className={cn(
+                  'absolute right-2 top-1/2 -translate-y-1/2',
+                  (hovered === entry.path || isSelected) ? 'opacity-100' : 'opacity-0',
+                  'transition-opacity'
+                )}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      data-menu-trigger
+                      className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="4" r="1" fill="currentColor" />
+                        <circle cx="8" cy="8" r="1" fill="currentColor" />
+                        <circle cx="8" cy="12" r="1" fill="currentColor" />
+                      </svg>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={() => handleRename(entry)}>
+                      <span className="mr-2">✏️</span> Rename
+                    </DropdownMenuItem>
+                    {!entry.isDirectory && (
+                      <DropdownMenuItem onClick={() => handleExport(entry)}>
+                        <span className="mr-2">📤</span> Export
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => handleDelete(entry)}
+                    >
+                      <span className="mr-2">🗑️</span> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
             {entry.isDirectory && isExpanded && hasChildren && (
               <FolderTree

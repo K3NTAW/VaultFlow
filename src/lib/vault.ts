@@ -1,4 +1,4 @@
-import { readDir, readTextFile, writeTextFile, remove, mkdir, copyFile } from '@tauri-apps/plugin-fs'
+import { readDir, readTextFile, writeTextFile, remove, mkdir, copyFile, rename as fsRename } from '@tauri-apps/plugin-fs'
 
 export interface FileEntry {
   name: string
@@ -151,6 +151,24 @@ export async function deleteFile(vaultPath: string, relativePath: string): Promi
     await remove(fullPath)
   } catch (error) {
     console.error('Error deleting file:', error)
+    throw error
+  }
+}
+
+/**
+ * Rename a file or directory in the vault
+ */
+export async function renameFile(
+  vaultPath: string,
+  oldRelativePath: string,
+  newRelativePath: string
+): Promise<void> {
+  const oldFullPath = await getFullPath(vaultPath, oldRelativePath)
+  const newFullPath = await getFullPath(vaultPath, newRelativePath)
+  try {
+    await fsRename(oldFullPath, newFullPath)
+  } catch (error) {
+    console.error('Error renaming file:', error)
     throw error
   }
 }

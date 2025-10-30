@@ -254,7 +254,10 @@ export function FolderView() {
                 </button>
 
                 {/* Three-dot menu */}
-                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className={cn(
+                  'absolute top-3 right-3 transition-opacity',
+                  isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                )}>
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       asChild
