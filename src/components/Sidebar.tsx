@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
 import { readDirectory, FileEntry, isNote, isCanvas, deleteFile, exportFile, renameFile, writeFileToVault, createDirectoryInVault, deleteEntryRecursive } from '@/lib/vault'
@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { motion, AnimatePresence } from 'framer-motion'
-import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, useDroppable, useDraggable, DragOverlay } from '@dnd-kit/core'
+import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, useDroppable, useDraggable, DragOverlay, pointerWithin } from '@dnd-kit/core'
 
 interface FolderTreeProps {
   entries: FileEntry[]
@@ -45,6 +45,7 @@ function FolderTree({ entries, vaultPath, level = 0, draggedId }: FolderTreeProp
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [hovered, setHovered] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<string | null>(null)
+  const expandTimers = useRef<Record<string, any>>({})
 
   const toggleExpand = (path: string) => {
     const newExpanded = new Set(expanded)
@@ -132,6 +133,23 @@ function FolderTree({ entries, vaultPath, level = 0, draggedId }: FolderTreeProp
     const setBothRefs = (node: HTMLElement | null) => { drag.setNodeRef(node); drop.setNodeRef(node) }
     // fade/lighten if this is the dragged row
     const isDragging = draggedId === entry.path
+    // Auto-expand folder on hover while dragging
+    if (drop.isOver && entry.isDirectory && !expanded.has(entry.path) && draggedId) {
+      if (!expandTimers.current[entry.path]) {
+        expandTimers.current[entry.path] = setTimeout(() => {
+          const next = new Set(expanded)
+          next.add(entry.path)
+          setExpanded(next)
+          clearTimeout(expandTimers.current[entry.path])
+          delete expandTimers.current[entry.path]
+        }, 250)
+      }
+    } else {
+      if (expandTimers.current[entry.path]) {
+        clearTimeout(expandTimers.current[entry.path])
+        delete expandTimers.current[entry.path]
+      }
+    }
     return (
       <div
         ref={setBothRefs}
@@ -193,6 +211,7 @@ function FolderTree({ entries, vaultPath, level = 0, draggedId }: FolderTreeProp
                   'transition-opacity'
                 )}
                 onClick={(e) => e.stopPropagation()}
+                style={{ pointerEvents: draggedId ? 'none' as const : 'auto' }}
               >
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -258,9 +277,12 @@ export function Sidebar() {
   const { vaultPath, refreshTrigger, setCurrentFile, refresh } = useVaultStore()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
   const [draggedId, setDraggedId] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
 
   const moveToTarget = async (src: { path: string; isDirectory: boolean }, targetPath: string) => {
-    if (src.path === targetPath) return
+    // If dropping onto itself (shouldn't happen) or same parent, no-op
+    const srcParent = src.path.split('/').slice(0, -1).join('/')
+    if (srcParent === targetPath) return
     // Prevent moving into own descendant
     if (targetPath && src.path !== '' && targetPath.startsWith(src.path + '/')) return
     const base = src.path.split('/').pop() as string
@@ -285,6 +307,7 @@ export function Sidebar() {
 
   // Drag and Droppable for root (Vault header)
   const rootDrop = useDroppable({ id: 'drop:VaultRoot', data: { path: '', isDirectory: true } })
+  const rootZoneDrop = useDroppable({ id: 'drop:RootZone', data: { path: '', isDirectory: true } })
 
   const handleDragEnd = async (event: DragEndEvent) => {
     setDraggedId(null)
@@ -294,7 +317,8 @@ export function Sidebar() {
     const overData = over.data.current as { path: string; isDirectory: boolean } | undefined
     if (!src) return
     const overId = String(over.id)
-    if (overId === 'drop:VaultRoot') {
+    const isRoot = overId === 'drop:VaultRoot' || overId === 'drop:RootZone' || (overData && overData.path === '')
+    if (isRoot) {
       await moveToTarget(src, '')
       return
     }
@@ -306,6 +330,22 @@ export function Sidebar() {
 
   const handleDragStart = (event: any) => {
     setDraggedId(event.active.id as string)
+  }
+
+  const handleDragMove = (_event: any) => {
+    const el = scrollRef.current
+    if (!el) return
+    const { top, bottom } = el.getBoundingClientRect()
+    const y = _event?.delta?.y !== undefined ? _event.delta.y : _event?.activatorEvent?.clientY
+    const clientY = typeof y === 'number' ? y : _event?.sensor?.coords?.y
+    if (typeof clientY !== 'number') return
+    const threshold = 28
+    const speed = 16
+    if (clientY < top + threshold) {
+      el.scrollTop -= speed
+    } else if (clientY > bottom - threshold) {
+      el.scrollTop += speed
+    }
   }
 
   const [tree, setTree] = useState<FileEntry[]>([])
@@ -427,9 +467,24 @@ export function Sidebar() {
       </div>
 
       <div className="relative flex-1 min-h-0 group/sidebar">
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={handleDragStart} >
-        <ScrollArea className="h-full notion-scroll px-2">
-          <div className="pb-3">
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragStart={handleDragStart} onDragMove={handleDragMove} collisionDetection={pointerWithin}>
+          <ScrollArea className="h-full notion-scroll px-2" ref={scrollRef}>
+            {/* Thin root drop zone at very top to move to Vault when dragging */}
+            <div
+              ref={rootZoneDrop.setNodeRef}
+              className={cn(
+                'sticky top-0 z-30 mx-[-8px] rounded-md transition-all',
+                draggedId ? 'h-10 my-1 px-3 flex items-center border border-dashed border-[#e2e3e4] dark:border-[#2a2a2a] bg-transparent pointer-events-auto' : 'h-0 pointer-events-none',
+                rootZoneDrop.isOver && 'bg-[#ebeced] dark:bg-[#202020]'
+              )}
+            >
+              {draggedId && (
+                <span className="text-[12px] leading-none text-[#6b6b6b] dark:text-[#a0a0a0]">
+                  Drop here to move to Vault
+                </span>
+              )}
+            </div>
+            <div className="pb-3"> 
             {isLoading ? (
               <div className="text-sm text-[#6b6b6b] dark:text-[#a0a0a0] p-4 text-center">Loading...</div>
             ) : filteredTree.length === 0 ? (

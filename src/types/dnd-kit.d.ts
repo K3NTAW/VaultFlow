@@ -6,6 +6,9 @@ declare module '@dnd-kit/core' {
   export const useSensor: any
   export const useSensors: any
   export const DragOverlay: any
+  export const rectIntersection: any
+  export const closestCenter: any
+  export const pointerWithin: any
   export type DragEndEvent = any
   export type DragOverEvent = any
 }
