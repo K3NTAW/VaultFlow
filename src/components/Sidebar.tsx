@@ -238,11 +238,28 @@ export function Sidebar() {
 
   const handleNewPage = async () => {
     try {
-      const ts = new Date()
-      const name = `Untitled ${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}-${String(ts.getDate()).padStart(2, '0')} ${String(ts.getHours()).padStart(2, '0')}-${String(ts.getMinutes()).padStart(2, '0')}`
-      const filename = `${name}.md`
-      await writeFileToVault(vaultPath, filename, `# ${name}\n\n`)
-      setCurrentFile(filename)
+      // Determine the active folder (empty string means root)
+      const { currentPath } = useNavStore.getState()
+      const parentFolder = currentPath ? currentPath : ''
+
+      // Read contents of the active folder
+      const entries: FileEntry[] = await readDirectory(vaultPath, parentFolder)
+      const existingFiles = new Set(entries.filter((e) => !e.isDirectory).map((e) => e.name))
+
+      // Generate Untitled, Untitled 2, Untitled 3, ...
+      let index = 1
+      let baseName = 'Untitled'
+      let displayName = baseName
+      let fileName = `${displayName}.md`
+      while (existingFiles.has(fileName)) {
+        index += 1
+        displayName = `${baseName} ${index}`
+        fileName = `${displayName}.md`
+      }
+
+      const relativePath = parentFolder ? `${parentFolder}/${fileName}` : fileName
+      await writeFileToVault(vaultPath, relativePath, `# ${displayName}\n\n`)
+      setCurrentFile(relativePath)
       refresh()
     } catch (e) {
       console.error('Failed to create page', e)
