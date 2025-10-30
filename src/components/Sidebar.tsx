@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
-import { readDirectory, FileEntry, isNote, isCanvas, deleteFile, exportFile, renameFile } from '@/lib/vault'
+import { readDirectory, FileEntry, isNote, isCanvas, deleteFile, exportFile, renameFile, writeFileToVault } from '@/lib/vault'
 import { ScrollArea } from './ui/scroll-area'
 import { Separator } from './ui/separator'
 import { cn } from '@/lib/utils'
@@ -14,11 +14,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface FolderTreeProps {
   entries: FileEntry[]
   vaultPath: string
   level?: number
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <motion.svg
+      width="14"
+      height="14"
+      viewBox="0 0 20 20"
+      fill="none"
+      className="text-[#6b6b6b] dark:text-[#a0a0a0] flex-shrink-0"
+      animate={{ rotate: open ? 90 : 0 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+    >
+      <path d="M7 5l6 5-6 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </motion.svg>
+  )
 }
 
 function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
@@ -106,34 +123,29 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
             <div
               onClick={() => handleClick(entry)}
               className={cn(
-                'relative flex items-center gap-3 px-3 py-2 text-sm cursor-pointer rounded-lg transition-all duration-150',
-                'hover:bg-accent/70',
-                isSelected && 'bg-accent font-medium text-foreground',
-                !isSelected && 'text-muted-foreground hover:text-foreground',
-                level > 0 && 'pl-6'
+                'relative flex items-center gap-1.5 pr-2 py-1.5 text-[13px] cursor-pointer rounded-md transition-colors',
+                'hover:bg-[#ebeced] dark:hover:bg-[#202020]',
+                isSelected ? 'bg-[#ebeced] dark:bg-[#202020] text-[#2f3437] dark:text-[#d1d1d1] font-medium' : 'text-[#6b6b6b] dark:text-[#a0a0a0]'
               )}
-              style={{ paddingLeft: `${12 + level * 20}px` }}
+              style={{ paddingLeft: `${8 + level * 14}px` }}
             >
               {entry.isDirectory ? (
                 <>
-                  <span className="text-base select-none flex-shrink-0">
-                    {isExpanded ? '📂' : '📁'}
-                  </span>
-                  <span className="flex-1 truncate font-medium">{entry.name}</span>
+                  <Chevron open={isExpanded} />
+                  <span className="flex-1 truncate">{entry.name}</span>
                 </>
               ) : (
                 <>
-                  <span className="text-base flex-shrink-0">
-                    {isNote(entry.name) ? '📄' : isCanvas(entry.name) ? '🎨' : '📎'}
+                  <span className="w-[14px]" />
+                  <span className="flex-1 truncate text-[13px] font-normal">
+                    {entry.name.replace(/\.(md|excalidraw\.json)$/, '')}
                   </span>
-                  <span className="flex-1 truncate">{entry.name.replace(/\.(md|excalidraw\.json)$/, '')}</span>
                 </>
               )}
 
-              {/* Three-dot menu */}
               <div
                 className={cn(
-                  'absolute right-2 top-1/2 -translate-y-1/2',
+                  'absolute right-1 top-1/2 -translate-y-1/2',
                   (hovered === entry.path || isSelected) ? 'opacity-100' : 'opacity-0',
                   'transition-opacity'
                 )}
@@ -143,7 +155,7 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
                   <DropdownMenuTrigger asChild>
                     <button
                       data-menu-trigger
-                      className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground"
+                      className="px-1.5 py-1 rounded-md hover:bg-[#ebeced] dark:hover:bg-[#202020] text-[#6b6b6b] dark:text-[#a0a0a0]"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -155,11 +167,11 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-44">
                     <DropdownMenuItem onClick={() => handleRename(entry)}>
-                      <span className="mr-2">✏️</span> Rename
+                      Rename
                     </DropdownMenuItem>
                     {!entry.isDirectory && (
                       <DropdownMenuItem onClick={() => handleExport(entry)}>
-                        <span className="mr-2">📤</span> Export
+                        Export
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
@@ -167,19 +179,28 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
                       className="text-destructive focus:text-destructive"
                       onClick={() => handleDelete(entry)}
                     >
-                      <span className="mr-2">🗑️</span> Delete
+                      Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
             </div>
-            {entry.isDirectory && isExpanded && hasChildren && (
-              <FolderTree
-                entries={entry.children!}
-                vaultPath={vaultPath}
-                level={level + 1}
-              />
-            )}
+            <AnimatePresence initial={false}>
+              {entry.isDirectory && isExpanded && hasChildren && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  <FolderTree
+                    entries={entry.children!}
+                    vaultPath={vaultPath}
+                    level={level + 1}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )
       })}
@@ -188,9 +209,10 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
 }
 
 export function Sidebar() {
-  const { vaultPath, refreshTrigger } = useVaultStore()
+  const { vaultPath, refreshTrigger, setCurrentFile, refresh } = useVaultStore()
   const [tree, setTree] = useState<FileEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
     if (!vaultPath) return
@@ -214,25 +236,108 @@ export function Sidebar() {
     return null
   }
 
+  const handleNewPage = async () => {
+    try {
+      const ts = new Date()
+      const name = `Untitled ${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}-${String(ts.getDate()).padStart(2, '0')} ${String(ts.getHours()).padStart(2, '0')}-${String(ts.getMinutes()).padStart(2, '0')}`
+      const filename = `${name}.md`
+      await writeFileToVault(vaultPath, filename, `# ${name}\n\n`)
+      setCurrentFile(filename)
+      refresh()
+    } catch (e) {
+      console.error('Failed to create page', e)
+      alert('Failed to create page')
+    }
+  }
+
+  const filteredTree = useMemo(() => {
+    if (!query.trim()) return tree
+    const q = query.toLowerCase()
+    const filterEntries = (entries: FileEntry[]): FileEntry[] =>
+      entries
+        .map((e) => ({
+          ...e,
+          children: e.children ? filterEntries(e.children) : undefined,
+        }))
+        .filter((e) =>
+          e.isDirectory
+            ? (e.children && e.children.length > 0) || e.name.toLowerCase().includes(q)
+            : e.name.toLowerCase().includes(q)
+        )
+    return filterEntries(tree)
+  }, [tree, query])
+
   return (
-    <div className="w-64 border-r border-border/60 bg-sidebar flex flex-col">
-      <div className="h-14 border-b border-border/60 flex items-center px-5 bg-sidebar/50">
-        <h2 className="text-sm font-semibold text-foreground">Vault</h2>
+    <motion.aside
+      className={cn(
+        'flex flex-col h-full',
+        'bg-[#f8f9fa] dark:bg-[#191919]',
+        'text-[#2f3437] dark:text-[#d1d1d1]'
+      )}
+      style={{ width: 260, minWidth: 260 }}
+      animate={{ opacity: 1 }}
+      initial={{ opacity: 0.98 }}
+      transition={{ duration: 0.15 }}
+    >
+      <div className="flex items-center px-3 py-3 border-b border-[#e2e3e4] dark:border-[#2a2a2a]">
+        <div className="text-[14px] font-semibold text-[#2f3437] dark:text-[#e4e4e4] truncate">Vault</div>
       </div>
-      <ScrollArea className="flex-1">
-        <div className="p-2">
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground p-6 text-center">Loading...</div>
-          ) : tree.length === 0 ? (
-            <div className="text-sm text-muted-foreground p-6 text-center">
-              Vault is empty. Create a note or canvas to get started.
-            </div>
-          ) : (
-            <FolderTree entries={tree} vaultPath={vaultPath} />
-          )}
+
+      <div className="px-3 py-2 space-y-2">
+        <div className="relative">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[#999]">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+              <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M14.5 14.5L18 18" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          </span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search"
+            className={cn(
+              'w-full bg-transparent border border-[#e2e3e4] dark:border-[#2a2a2a]',
+              'rounded-md pl-7 pr-3 py-1.5 text-sm',
+              'focus:outline-none focus:ring-1 focus:ring-[#9b9b9b]',
+              'placeholder:text-[#999]'
+            )}
+          />
         </div>
-      </ScrollArea>
-    </div>
+      </div>
+
+      <div className="relative flex-1 min-h-0 group/sidebar">
+        <ScrollArea className="h-full notion-scroll px-2">
+          <div className="pb-3">
+            {isLoading ? (
+              <div className="text-sm text-[#6b6b6b] dark:text-[#a0a0a0] p-4 text-center">Loading...</div>
+            ) : filteredTree.length === 0 ? (
+              <div className="text-sm text-[#6b6b6b] dark:text-[#a0a0a0] p-4 text-center">No results</div>
+            ) : (
+              <FolderTree entries={filteredTree} vaultPath={vaultPath} />
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      <div className="px-3 py-2 border-t border-[#e2e3e4] dark:border-[#2a2a2a]">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleNewPage}
+            className="text-sm text-[#6b6b6b] dark:text-[#a0a0a0] hover:text-black dark:hover:text-white transition-colors"
+          >
+            + New Page
+          </button>
+          <button
+            onClick={() => {
+              // placeholder: wire to settings route or modal later
+            }}
+            className="text-sm text-[#6b6b6b] dark:text-[#a0a0a0] hover:text-black dark:hover:text-white transition-colors"
+          >
+            Settings
+          </button>
+        </div>
+      </div>
+    </motion.aside>
   )
 }
 
