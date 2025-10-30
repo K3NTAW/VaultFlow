@@ -9,6 +9,24 @@ export function Breadcrumbs() {
   const { currentFile } = useVaultStore()
 
   const displayPath = currentFile || currentPath
+  if (!displayPath) {
+    return (
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+        <button
+          onClick={() => {
+            setCurrentPath('')
+            setCurrentFile(null)
+          }}
+          className={cn(
+            'text-sm font-medium text-muted-foreground hover:text-foreground transition-colors',
+            'px-2.5 py-1 rounded-md hover:bg-accent/70'
+          )}
+        >
+          Vault
+        </button>
+      </div>
+    )
+  }
   const segments = displayPath.split('/').filter(Boolean)
 
   const handleClick = (index: number) => {

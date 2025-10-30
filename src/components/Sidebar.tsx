@@ -61,7 +61,7 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
       setCurrentFile(null) // Clear file selection when opening folder
     } else if (isNote(entry.name) || isCanvas(entry.name)) {
       setCurrentFile(entry.path)
-      setCurrentPath(null) // Clear folder path when opening file
+      setCurrentPath("") // was setCurrentPath(null)
     }
   }
 
@@ -89,8 +89,9 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
     if (!confirm(`Delete "${entry.name}"?`)) return
     try {
       await deleteFile(vaultPath, entry.path)
+      // If we're deleting the current file or path, clear both
       if (currentFile === entry.path) setCurrentFile(null)
-      if (currentPath === entry.path) setCurrentPath('')
+      if (currentPath === entry.path) setCurrentPath("")
       refresh()
     } catch (e) {
       console.error('Delete failed', e)
