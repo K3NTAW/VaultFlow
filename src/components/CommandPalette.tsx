@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   KBarProvider,
   KBarPortal,
@@ -17,6 +17,8 @@ import { useAIStore } from '@/store/useAIStore'
 import { queryVault, initializeAI } from '@/lib/ai'
 import { writeFileToVault } from '@/lib/vault'
 import { FileNameInput } from './FileNameInput'
+import Fuse from 'fuse.js'
+import { readDirectory, readFile, FileEntry, isNote, isCanvas } from '@/lib/vault'
 
 
 export function CommandPalette() {
@@ -26,6 +28,8 @@ export function CommandPalette() {
   
   const [showNoteInput, setShowNoteInput] = useState(false)
   const [showCanvasInput, setShowCanvasInput] = useState(false)
+  const [fileIndex, setFileIndex] = useState<Array<{ path: string; name: string; content?: string; kind: 'note' | 'canvas' | 'other' }>>([])
+  const [isBuildingIndex, setIsBuildingIndex] = useState(false)
 
   // Note: We use useVaultStore.getState() and useNavStore.getState() inside actions
   // to get the latest state when the action is performed, since hooks can't be used in callbacks
@@ -132,16 +136,6 @@ export function CommandPalette() {
       },
     },
     {
-      id: 'search-notes',
-      name: 'Search Notes',
-      shortcut: ['f'],
-      keywords: 'find search',
-      perform: () => {
-        // This could open a search modal or focus search input
-        alert('Search functionality - to be implemented')
-      },
-    },
-    {
       id: 'toggle-ai',
       name: 'Toggle AI Assistant',
       shortcut: ['i'],
@@ -152,6 +146,46 @@ export function CommandPalette() {
       },
     },
   ]
+
+  // Build a fuzzy index of files (name, path, and a short content snippet) like zoxide-style search
+  useEffect(() => {
+    const buildIndex = async () => {
+      if (!vaultPath) { setFileIndex([]); return }
+      setIsBuildingIndex(true)
+      try {
+        const collect = async (entries: FileEntry[], base: string): Promise<Array<{ path: string; name: string; content?: string; kind: 'note' | 'canvas' | 'other' }>> => {
+          const out: Array<{ path: string; name: string; content?: string; kind: 'note' | 'canvas' | 'other' }> = []
+          for (const e of entries) {
+            if (e.isDirectory) {
+              const children = e.children || []
+              out.push(...(await collect(children, base)))
+            } else {
+              const p = e.path
+              const name = e.name
+              let content: string | undefined
+              if (isNote(name)) {
+                try {
+                  const text = await readFile(vaultPath, p)
+                  content = text.slice(0, 2000) // sample first 2k for speed
+                } catch {}
+              }
+              const kind: 'note' | 'canvas' | 'other' = isNote(name) ? 'note' : isCanvas(name) ? 'canvas' : 'other'
+              out.push({ path: p, name, content, kind })
+            }
+          }
+          return out
+        }
+        const root = await readDirectory(vaultPath, '')
+        const flat = await collect(root, '')
+        setFileIndex(flat)
+        // @ts-ignore
+        window.__vaultflow_file_index = flat
+      } finally {
+        setIsBuildingIndex(false)
+      }
+    }
+    buildIndex()
+  }, [vaultPath, refresh])
 
   const handleNoteCreate = async (fileName: string) => {
     const { vaultPath: currentVaultPath, setCurrentFile } = useVaultStore.getState()
@@ -238,7 +272,7 @@ export function CommandPalette() {
   return (
     <>
       <KBarProvider actions={actions}>
-        <CommandPaletteContent />
+        <CommandPaletteContent fileIndex={fileIndex} />
       </KBarProvider>
       <FileNameInput
         isOpen={showNoteInput}
@@ -260,23 +294,53 @@ export function CommandPalette() {
   )
 }
 
-function CommandPaletteContent() {
+function CommandPaletteContent({ fileIndex }: { fileIndex: Array<{ path: string; name: string; content?: string; kind: 'note' | 'canvas' | 'other' }> }) {
   return (
     <KBarPortal>
       <KBarPositioner className="bg-black/50 backdrop-blur-sm z-50">
         <KBarAnimator className="bg-background border border-border rounded-lg shadow-lg overflow-hidden w-full max-w-2xl">
           <KBarSearch className="w-full px-4 py-3 text-sm outline-none border-b border-border" />
-          <RenderResults />
+          <RenderResults fileIndex={fileIndex} />
         </KBarAnimator>
       </KBarPositioner>
     </KBarPortal>
   )
 }
 
-function RenderResults() {
+function RenderResults({ fileIndex }: { fileIndex: Array<{ path: string; name: string; content?: string; kind: 'note' | 'canvas' | 'other' }> }) {
   const { results } = useMatches()
+  const { searchQuery } = useKBar((state) => ({ searchQuery: state.searchQuery }))
+  const { setCurrentFile } = useVaultStore()
+  const { setCurrentPath } = useNavStore()
+  const fuse = useMemo(() => {
+    if (!fileIndex || fileIndex.length === 0) return null
+    return new Fuse(fileIndex, {
+      keys: [
+        { name: 'name', weight: 0.6 },
+        { name: 'path', weight: 0.25 },
+        { name: 'content', weight: 0.15 },
+      ],
+      threshold: 0.38,
+      ignoreLocation: true,
+      includeScore: true,
+      minMatchCharLength: 2,
+    })
+  }, [fileIndex])
 
-  return (
+  const sq = typeof searchQuery === 'string' ? searchQuery.trim() : ''
+  const fileMatches = useMemo(() => {
+    if (!fuse || !sq) return []
+    // Support multi-token AND like zoxide: split by spaces and filter intersect
+    const tokens = sq.split(/\s+/).filter(Boolean)
+    let matches = fuse.search(tokens[0])
+    for (let i = 1; i < tokens.length; i++) {
+      const set = new Set(fuse.search(tokens[i]).map(r => r.item.path))
+      matches = matches.filter(m => set.has(m.item.path))
+    }
+    return matches.slice(0, 20)
+  }, [fuse, sq])
+
+  const rendered = (
     <KBarResults
       items={results}
       onRender={({ item, active }) => {
@@ -312,6 +376,63 @@ function RenderResults() {
         )
       }}
     />
+  )
+
+  if (!sq || !fileMatches.length) return rendered
+
+  // Merge actions (top) and file results (below)
+  return (
+    <div className="max-h-[60vh] overflow-y-auto">
+      {rendered}
+      {(() => {
+        const notes = fileMatches.filter(m => m.item.kind === 'note')
+        const canvases = fileMatches.filter(m => m.item.kind === 'canvas')
+        return (
+          <>
+            {!!notes.length && (
+              <>
+                <div className="px-4 pt-3 pb-2 text-xs font-semibold text-muted-foreground uppercase">Notes</div>
+                <div className="py-1">
+                  {notes.map(({ item }) => (
+                    <button
+                      key={item.path}
+                      className="w-full text-left px-4 py-2 hover:bg-accent flex items-center gap-2"
+                      onClick={() => {
+                        setCurrentFile(item.path)
+                        setCurrentPath('')
+                      }}
+                    >
+                      <span>📄</span>
+                      <span className="text-xs text-muted-foreground">{item.path}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {!!canvases.length && (
+              <>
+                <div className="px-4 pt-3 pb-2 text-xs font-semibold text-muted-foreground uppercase">Canvases</div>
+                <div className="py-1">
+                  {canvases.map(({ item }) => (
+                    <button
+                      key={item.path}
+                      className="w-full text-left px-4 py-2 hover:bg-accent flex items-center gap-2"
+                      onClick={() => {
+                        setCurrentFile(item.path)
+                        setCurrentPath('')
+                      }}
+                    >
+                      <span>🎨</span>
+                      <span className="text-xs text-muted-foreground">{item.path}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )
+      })()}
+    </div>
   )
 }
 
