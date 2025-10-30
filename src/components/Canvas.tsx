@@ -15,8 +15,8 @@ const Excalidraw = dynamic(
 
 import { useVaultStore } from '@/store/useVaultStore'
 import { readFile, writeFileToVault } from '@/lib/vault'
-import { Main } from 'next/document'
-import { MainMenu } from '@excalidraw/excalidraw'
+
+// We'll import the full Excalidraw module on the client to access MainMenu.DefaultItems safely
 
 export function Canvas() {
   const { vaultPath, currentFile } = useVaultStore()
@@ -24,6 +24,7 @@ export function Canvas() {
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [excalModule, setExcalModule] = useState<any | null>(null)
 
   // Detect app theme (based on dark class on html/body element)
   useEffect(() => {
@@ -48,6 +49,18 @@ export function Canvas() {
     })
     
     return () => observer.disconnect()
+  }, [])
+
+  // Load Excalidraw module on client so we can use MainMenu.DefaultItems safely
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const mod = await import('@excalidraw/excalidraw')
+      if (mounted) setExcalModule(mod)
+    })()
+    return () => {
+      mounted = false
+    }
   }, [])
 
   useEffect(() => {
@@ -172,17 +185,19 @@ export function Canvas() {
         {canvasData && (
           <div className="h-full w-full excalidraw-container">
             <Excalidraw>
-              <MainMenu>
-                <MainMenu.DefaultItems.Export/>
-                <MainMenu.DefaultItems.CommandPalette/>
-                <MainMenu.DefaultItems.SearchMenu/>
-                <MainMenu.DefaultItems.SaveAsImage/>
-                <MainMenu.Separator/>
-                <MainMenu.DefaultItems.ClearCanvas/>
-                <MainMenu.DefaultItems.ChangeCanvasBackground/>
-                <MainMenu.DefaultItems.ToggleTheme/>
-                <MainMenu.DefaultItems.Help/>
-              </MainMenu>
+              {excalModule && (
+                <excalModule.MainMenu>
+                  <excalModule.MainMenu.DefaultItems.Export />
+                  <excalModule.MainMenu.DefaultItems.CommandPalette />
+                  <excalModule.MainMenu.DefaultItems.SearchMenu />
+                  <excalModule.MainMenu.DefaultItems.SaveAsImage />
+                  <excalModule.MainMenu.Separator />
+                  <excalModule.MainMenu.DefaultItems.ClearCanvas />
+                  <excalModule.MainMenu.DefaultItems.ChangeCanvasBackground />
+                  <excalModule.MainMenu.DefaultItems.ToggleTheme />
+                  <excalModule.MainMenu.DefaultItems.Help />
+                </excalModule.MainMenu>
+              )}
             </Excalidraw>
           </div>
         )}
