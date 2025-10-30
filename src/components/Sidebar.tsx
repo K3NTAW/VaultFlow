@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 import { motion, AnimatePresence } from 'framer-motion'
+import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, useDroppable, useDraggable } from '@dnd-kit/core'
 
 interface FolderTreeProps {
   entries: FileEntry[]
@@ -43,6 +44,7 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
   const { currentPath, setCurrentPath } = useNavStore()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [hovered, setHovered] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState<string | null>(null)
 
   const toggleExpand = (path: string) => {
     const newExpanded = new Set(expanded)
@@ -115,6 +117,26 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
     }
   }
 
+  const getBaseName = (p: string) => p.split('/').pop() || p
+  const getParent = (p: string) => p.split('/').slice(0, -1).join('/')
+  const isDescendant = (parent: string, child: string) => {
+    if (!parent) return false
+    const pref = parent.endsWith('/') ? parent : parent + '/'
+    return child.startsWith(pref)
+  }
+
+  // dnd-kit helpers for each row
+  const Row = ({ entry, children }: { entry: FileEntry; children: React.ReactNode }) => {
+    const drag = useDraggable({ id: entry.path, data: { path: entry.path, isDirectory: entry.isDirectory } })
+    const drop = useDroppable({ id: `drop:${entry.path}`, data: { path: entry.path, isDirectory: entry.isDirectory } })
+    const setBothRefs = (node: HTMLElement | null) => { drag.setNodeRef(node); drop.setNodeRef(node) }
+    return (
+      <div ref={setBothRefs} {...drag.listeners} {...drag.attributes} data-over={drop.isOver}>
+        {children}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-0.5">
       {entries.map((entry) => {
@@ -127,12 +149,14 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
             onMouseEnter={() => setHovered(entry.path)}
             onMouseLeave={() => setHovered((h) => (h === entry.path ? null : h))}
           >
+            <Row entry={entry}>
             <div
               onClick={() => handleClick(entry)}
               className={cn(
                 'relative flex items-center gap-1.5 pr-2 py-1.5 text-[13px] cursor-pointer rounded-md transition-colors',
                 'hover:bg-[#ebeced] dark:hover:bg-[#202020]',
-                isSelected ? 'bg-[#ebeced] dark:bg-[#202020] text-[#2f3437] dark:text-[#d1d1d1] font-medium' : 'text-[#6b6b6b] dark:text-[#a0a0a0]'
+                isSelected ? 'bg-[#ebeced] dark:bg-[#202020] text-[#2f3437] dark:text-[#d1d1d1] font-medium' : 'text-[#6b6b6b] dark:text-[#a0a0a0]',
+                dragOver === entry.path && 'ring-1 ring-[#9b9b9b] dark:ring-[#3a3a3a]'
               )}
               style={{ paddingLeft: `${8 + level * 14}px` }}
             >
@@ -192,6 +216,7 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
                 </DropdownMenu>
               </div>
             </div>
+            </Row>
             <AnimatePresence initial={false}>
               {entry.isDirectory && isExpanded && hasChildren && (
                 <motion.div
@@ -217,6 +242,47 @@ function FolderTree({ entries, vaultPath, level = 0 }: FolderTreeProps) {
 
 export function Sidebar() {
   const { vaultPath, refreshTrigger, setCurrentFile, refresh } = useVaultStore()
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  const moveToTarget = async (src: { path: string; isDirectory: boolean }, targetPath: string) => {
+    if (src.path === targetPath) return
+    // Prevent moving into own descendant
+    if (targetPath && src.path !== '' && targetPath.startsWith(src.path + '/')) return
+    const base = src.path.split('/').pop() as string
+    const targetEntries = await readDirectory(vaultPath!, targetPath)
+    const existing = new Set(targetEntries.map((t) => t.name))
+    let name = base
+    if (existing.has(name)) {
+      const ext = src.isDirectory ? '' : (name.includes('.') ? '.' + name.split('.').pop() : '')
+      const stem = src.isDirectory ? name : name.replace(new RegExp(`${ext.replace('.', '\\.')}$`), '')
+      let idx = 1
+      let candidate = `${stem} ${idx}${ext}`
+      while (existing.has(candidate)) { idx++; candidate = `${stem} ${idx}${ext}` }
+      name = candidate
+    }
+    const newRel = targetPath ? `${targetPath}/${name}` : name
+    if (newRel === src.path) return
+    await renameFile(vaultPath!, src.path, newRel)
+    if (useVaultStore.getState().currentFile === src.path) useVaultStore.getState().setCurrentFile(newRel)
+    if (useNavStore.getState().currentPath === src.path) useNavStore.getState().setCurrentPath(newRel)
+    refresh()
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over) return
+    const src = active.data.current as { path: string; isDirectory: boolean } | undefined
+    const overData = over.data.current as { path: string; isDirectory: boolean } | undefined
+    if (!src) return
+    // Dropping onto a folder row uses droppable id `drop:<path>`
+    const overId = String(over.id)
+    if (overId.startsWith('drop:') && overData && overData.isDirectory) {
+      const targetPath = overData.path
+      await moveToTarget(src, targetPath)
+      return
+    }
+    // Dropping anywhere else (e.g., header root) if we made it droppable elsewhere
+  }
   const [tree, setTree] = useState<FileEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [query, setQuery] = useState('')
@@ -303,7 +369,39 @@ export function Sidebar() {
       initial={{ opacity: 0.98 }}
       transition={{ duration: 0.15 }}
     >
-      <div className="flex items-center px-3 py-3 border-b border-[#e2e3e4] dark:border-[#2a2a2a]">
+      <div
+        className="flex items-center px-3 py-3 border-b border-[#e2e3e4] dark:border-[#2a2a2a]"
+        onDragOver={(e) => { e.preventDefault(); }}
+        onDrop={async (e) => {
+          try {
+            const data = e.dataTransfer.getData('application/json')
+            if (!data) return
+            const src = JSON.parse(data) as { path: string; isDirectory: boolean }
+            const base = src.path.split('/').pop() as string
+            const targetEntries = await readDirectory(vaultPath, '')
+            const existing = new Set(targetEntries.map((t) => t.name))
+            let name = base
+            if (existing.has(name)) {
+              const ext = src.isDirectory ? '' : (name.includes('.') ? '.' + name.split('.').pop() : '')
+              const stem = src.isDirectory ? name : name.replace(new RegExp(`${ext.replace('.', '\\.')}$`), '')
+              let idx = 1
+              let candidate = `${stem} ${idx}${ext}`
+              while (existing.has(candidate)) { idx++; candidate = `${stem} ${idx}${ext}` }
+              name = candidate
+            }
+            const newRelative = name
+            if (newRelative !== src.path) {
+              await renameFile(vaultPath, src.path, newRelative)
+              if (useVaultStore.getState().currentFile === src.path) useVaultStore.getState().setCurrentFile(newRelative)
+              if (useNavStore.getState().currentPath === src.path) useNavStore.getState().setCurrentPath(newRelative)
+              refresh()
+            }
+          } catch (err) {
+            console.error('Move to root failed', err)
+            alert('Failed to move item to root')
+          }
+        }}
+      >
         <div className="text-[14px] font-semibold text-[#2f3437] dark:text-[#e4e4e4] truncate">Vault</div>
       </div>
 
@@ -330,6 +428,7 @@ export function Sidebar() {
       </div>
 
       <div className="relative flex-1 min-h-0 group/sidebar">
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <ScrollArea className="h-full notion-scroll px-2">
           <div className="pb-3">
             {isLoading ? (
@@ -341,6 +440,7 @@ export function Sidebar() {
             )}
           </div>
         </ScrollArea>
+        </DndContext>
       </div>
 
       <div className="px-3 py-2 border-t border-[#e2e3e4] dark:border-[#2a2a2a]">
