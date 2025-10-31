@@ -6,6 +6,7 @@ import { useNavStore } from '@/store/useNavStore'
 import { queryVault, initializeAI, initializeLocalAI, setAIMode, type AIMode, getModelLoadingProgress, isModelBeingLoaded, setHuggingFaceToken } from '@/lib/ai'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { marked } from 'marked'
 
 type LocalMessage = { id: string; role: 'user' | 'assistant'; content: string; citations?: string[] }
 
@@ -38,7 +39,12 @@ export function AIPanel() {
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+      }, 100)
     }
   }, [messages, isProcessing])
 
@@ -125,7 +131,7 @@ export function AIPanel() {
       </div>
 
       {/* Chat Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 notion-scroll">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 notion-scroll min-h-0">
         <AnimatePresence initial={false}>
           <motion.div
             initial={{ opacity: 0, y: 4 }}
@@ -182,10 +188,18 @@ export function AIPanel() {
                     className={
                       message.role === 'user'
                         ? 'bg-[#e2e3e4] dark:bg-[#2c2c2c] px-3 py-2 rounded-lg ml-auto text-[14px] leading-[15px]'
-                        : 'bg-[#f0f0f0] dark:bg-[#1f1f1f] px-3 py-2 rounded-lg text-[14px] leading-[15px]'
+                        : 'bg-[#f0f0f0] dark:bg-[#1f1f1f] px-3 py-2 rounded-lg text-[14px] leading-[15px] prose prose-sm max-w-none dark:prose-invert'
                     }
                   >
-                    {message.content}
+                    {message.role === 'assistant' ? (
+                      <div
+                        dangerouslySetInnerHTML={{
+                          __html: marked.parse(message.content, { breaks: true, gfm: true }) as string,
+                        }}
+                      />
+                    ) : (
+                      message.content
+                    )}
                   </div>
                   {message.role === 'assistant' && renderCitations(message.citations)}
                 </div>
@@ -205,7 +219,7 @@ export function AIPanel() {
       </div>
 
       {/* Input Bar */}
-      <div className="sticky bottom-0 bg-[#fafafa] dark:bg-[#191919] border-t border-[#e2e3e4] dark:border-[#2a2a2a] px-3 py-2">
+      <div className="flex-shrink-0 bg-[#fafafa] dark:bg-[#191919] border-t border-[#e2e3e4] dark:border-[#2a2a2a] px-3 py-2">
         <form
           onSubmit={handleSubmit}
           className="flex items-end gap-2"

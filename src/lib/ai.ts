@@ -208,13 +208,10 @@ async function generateText(prompt: string, maxTokens: number = 500): Promise<st
         const fileMatch = chunk.match(/\[File: ([^\]]+)\]/)
         const fileName = fileMatch ? fileMatch[1] : 'your notes'
         
-        // Extract a relevant snippet (first 300 chars or until newline after that)
+        // Use full content, don't truncate
         const content = chunk.replace(/\[File: [^\]]+\]\n?/g, '').trim()
-        const snippet = content.length > 300 
-          ? content.substring(0, 300) + '...'
-          : content
         
-        response += `**From ${fileName}:**\n${snippet}\n\n`
+        response += `**From ${fileName}:**\n\n${content}\n\n`
       }
     }
     
@@ -286,9 +283,9 @@ export async function queryVault(
     }
   }
 
-  // Build context prompt
+  // Build context prompt - use full content, don't truncate
   const contextText = contexts
-    .map((ctx) => `[File: ${ctx.file}]\n${ctx.content.slice(0, 2000)}`)
+    .map((ctx) => `[File: ${ctx.file}]\n${ctx.content}`)
     .join('\n\n---\n\n')
 
   const userPrompt = currentMode === 'local'
