@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
-import { queryVault, initializeAI } from '@/lib/ai'
+import { queryVault, initializeAI, initializeLocalAI, setAIMode, type AIMode, getModelLoadingProgress, isModelBeingLoaded, setHuggingFaceToken } from '@/lib/ai'
 import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from '@/lib/utils'
 
 type LocalMessage = { id: string; role: 'user' | 'assistant'; content: string; citations?: string[] }
 
@@ -13,16 +14,25 @@ export function AIPanel() {
   const { vaultPath } = useVaultStore()
   const [query, setQuery] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [mode, setMode] = useState<AIMode>('local')
   const [messages, setMessages] = useState<LocalMessage[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [modelLoading, setModelLoading] = useState(false)
+  const [modelProgress, setModelProgress] = useState(0)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     const savedKey = localStorage.getItem('openai_api_key')
-    if (savedKey) {
+    const savedMode = (localStorage.getItem('ai_mode') || 'local') as AIMode
+    setMode(savedMode)
+    setAIMode(savedMode)
+    
+    if (savedMode === 'local') {
+      initializeLocalAI()
+    } else if (savedKey) {
       setApiKey(savedKey)
-      initializeAI(savedKey)
+      initializeAI(savedKey, 'openai')
     }
   }, [])
 
@@ -32,16 +42,38 @@ export function AIPanel() {
     }
   }, [messages, isProcessing])
 
+  // Monitor model loading progress
+  useEffect(() => {
+    if (mode === 'local') {
+      const interval = setInterval(() => {
+        setModelLoading(isModelBeingLoaded())
+        setModelProgress(getModelLoadingProgress())
+      }, 100)
+      return () => clearInterval(interval)
+    }
+  }, [mode])
+
+  const handleModeChange = (newMode: AIMode) => {
+    setMode(newMode)
+    setAIMode(newMode)
+    localStorage.setItem('ai_mode', newMode)
+    
+    if (newMode === 'local') {
+      initializeLocalAI()
+    } else if (apiKey) {
+      initializeAI(apiKey, 'openai')
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!query.trim() || !vaultPath) return
 
-    if (!apiKey) {
-      const key = prompt('Enter your OpenAI API key:')
-      if (!key) return
-      setApiKey(key)
-      localStorage.setItem('openai_api_key', key)
-      initializeAI(key)
+    // Always use local mode - initialize if not already done
+    try {
+      initializeLocalAI()
+    } catch {
+      // Errors handled below
     }
 
     const userQuery = query.trim()
@@ -56,7 +88,8 @@ export function AIPanel() {
       setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: result.answer, citations: result.citations }])
     } catch (error) {
       const msgId = `${Date.now()}-e`
-      setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` }])
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: `Error: ${errorMsg}` }])
     } finally {
       setIsProcessing(false)
     }
@@ -86,9 +119,9 @@ export function AIPanel() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.15 }}
     >
-      {/* Top border for separation (no tabs) */}
-      <div className="px-4 py-3 border-b border-[#e2e3e4] dark:border-[#2a2a2a] text-[14px] leading-[15px]">
-        <span className="font-semibold text-[#2f3437] dark:text-[#e4e4e4]">AI</span>
+      {/* Top border for separation */}
+      <div className="px-4 py-3 border-b border-[#e2e3e4] dark:border-[#2a2a2a]">
+        <span className="font-semibold text-[#2f3437] dark:text-[#e4e4e4] text-[14px] leading-[15px]">AI (Local)</span>
       </div>
 
       {/* Chat Area */}
@@ -104,7 +137,34 @@ export function AIPanel() {
             {currentMessages.length === 0 && (
               <div className="text-sm text-[#6b6b6b] dark:text-[#a0a0a0]">
                 <p>Ask questions about your vault content.</p>
-                <p className="mt-2">The AI will search through your notes and provide contextual answers.</p>
+                <p className="mt-2">
+                  {mode === 'local' 
+                    ? 'Using local AI models - everything runs in your browser with no external APIs.'
+                    : 'Using OpenAI for text generation.'}
+                </p>
+                {mode === 'local' && (
+                  <p className="mt-2 text-xs text-[#999]">
+                    If you see authentication errors, get a free HuggingFace token at{' '}
+                    <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" className="underline">
+                      huggingface.co/settings/tokens
+                    </a>
+                    {' '}and we can add it.
+                  </p>
+                )}
+                {mode === 'local' && modelLoading && (
+                  <div className="mt-4 p-3 bg-[#f0f0f0] dark:bg-[#1f1f1f] rounded-lg">
+                    <p className="text-xs mb-2">Loading AI model...</p>
+                    <div className="w-full bg-[#e2e3e4] dark:bg-[#2a2a2a] rounded-full h-2">
+                      <div 
+                        className="bg-[#2f3437] dark:bg-[#d1d1d1] h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${modelProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs mt-2 text-[#999]">
+                      {modelProgress < 50 ? 'Loading embedding model...' : 'Loading text generation model...'}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
