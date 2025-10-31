@@ -3,21 +3,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
+import { useAIStore } from '@/store/useAIStore'
 import { queryVault, initializeAI, initializeLocalAI, setAIMode, type AIMode, getModelLoadingProgress, isModelBeingLoaded, setHuggingFaceToken } from '@/lib/ai'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { marked } from 'marked'
 
-type LocalMessage = { id: string; role: 'user' | 'assistant'; content: string; citations?: string[] }
+// Using AIMessage from store instead of local type
 
 export function AIPanel() {
   const { setAIPanelVisible } = useNavStore()
   const { vaultPath } = useVaultStore()
+  const { messages, addMessage, clearMessages, isProcessing, setIsProcessing, getConversationContext } = useAIStore()
   const [query, setQuery] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [mode, setMode] = useState<AIMode>('local')
-  const [messages, setMessages] = useState<LocalMessage[]>([])
-  const [isProcessing, setIsProcessing] = useState(false)
   const [modelLoading, setModelLoading] = useState(false)
   const [modelProgress, setModelProgress] = useState(0)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -84,18 +84,27 @@ export function AIPanel() {
 
     const userQuery = query.trim()
     setQuery('')
-    const currentId = `${Date.now()}-u`
-    setMessages((prev) => [...prev, { id: currentId, role: 'user', content: userQuery }])
+    
+    // Add user message
+    addMessage({ role: 'user', content: userQuery })
 
     setIsProcessing(true)
     try {
-      const result = await queryVault(vaultPath, userQuery)
-      const msgId = `${Date.now()}-a`
-      setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: result.answer, citations: result.citations }])
+      // Get conversation context for memory
+      const conversationContext = getConversationContext(6)
+      
+      const result = await queryVault(vaultPath, userQuery, 5, conversationContext)
+      addMessage({ 
+        role: 'assistant', 
+        content: result.answer, 
+        citations: result.citations 
+      })
     } catch (error) {
-      const msgId = `${Date.now()}-e`
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-      setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: `Error: ${errorMsg}` }])
+      addMessage({ 
+        role: 'assistant', 
+        content: `Error: ${errorMsg}` 
+      })
     } finally {
       setIsProcessing(false)
     }
@@ -116,7 +125,7 @@ export function AIPanel() {
   }
 
   const currentMessages = messages
-  const clearCurrent = () => setMessages([])
+  const clearCurrent = () => clearMessages()
 
   return (
     <motion.aside
