@@ -31,6 +31,7 @@ export function FolderView() {
       } catch (error) {
         console.error('Error loading folder:', error)
         setItems([])
+        setCurrentPath('')
       } finally {
         setIsLoading(false)
       }
@@ -62,27 +63,29 @@ export function FolderView() {
   }
 
   const handleRename = async (item: FileEntry) => {
-    const newName = window.prompt('Enter new name:', item.name.replace(/\.(md|excalidraw\.json)$/, ''))
-    if (!newName || newName.trim() === '' || newName === item.name) {
-      return
-    }
-
-    const sanitized = newName.trim().replace(/[<>:"/\\|?*]/g, '-')
-    const extension = item.name.includes('.') ? item.name.split('.').pop() : ''
-    const newFileName = extension ? `${sanitized}.${extension}` : sanitized
-    
+    const base = item.name.replace(/\.(md|excalidraw\.json)$/, '')
+    const proposed = window.prompt('Enter new name:', base)
+    if (!proposed) return
+    const raw = proposed.trim()
+    if (!raw) return
+    const sanitized = raw.replace(/[<>:"/\\|?*]/g, '-')
     try {
       const parentPath = currentPath || ''
-      const oldPath = parentPath ? `${parentPath}/${item.name}` : item.name
-      const newPath = parentPath ? `${parentPath}/${newFileName}` : newFileName
-      
-      await renameFile(vaultPath!, oldPath, newPath)
-      
-      // Update current file if it was the renamed file
-      if (useVaultStore.getState().currentFile === oldPath) {
-        setCurrentFile(newPath)
+      const siblings = await readDirectory(vaultPath!, parentPath)
+      const existing = new Set(siblings.map(s => s.name))
+      const ext = item.isDirectory ? '' : (item.name.includes('.') ? `.${item.name.split('.').pop()}` : '')
+      let finalName = `${sanitized}${ext}`
+      if (existing.has(finalName) && finalName !== item.name) {
+        let idx = 2
+        let candidate = `${sanitized} ${idx}${ext}`
+        while (existing.has(candidate)) { idx++; candidate = `${sanitized} ${idx}${ext}` }
+        finalName = candidate
       }
-      
+      const oldPath = parentPath ? `${parentPath}/${item.name}` : item.name
+      const newPath = parentPath ? `${parentPath}/${finalName}` : finalName
+      if (newPath === oldPath) return
+      await renameFile(vaultPath!, oldPath, newPath)
+      if (useVaultStore.getState().currentFile === oldPath) setCurrentFile(newPath)
       refresh()
       setSelectedItem(null)
     } catch (error) {

@@ -5,6 +5,7 @@ import { useVaultStore } from '@/store/useVaultStore'
 import { useNavStore } from '@/store/useNavStore'
 import { readDirectory, FileEntry, isNote, isCanvas, deleteFile, exportFile, renameFile, writeFileToVault, createDirectoryInVault, deleteEntryRecursive } from '@/lib/vault'
 import { ScrollArea } from './ui/scroll-area'
+import { FileNameInput } from './FileNameInput'
 import { Separator } from './ui/separator'
 import { cn } from '@/lib/utils'
 import {
@@ -68,24 +69,9 @@ function FolderTree({ entries, vaultPath, level = 0, draggedId }: FolderTreeProp
     }
   }
 
+  const [renameTarget, setRenameTarget] = useState<FileEntry | null>(null)
   const handleRename = async (entry: FileEntry) => {
-    const base = entry.name.replace(/\.(md|excalidraw\.json)$/, '')
-    const newName = window.prompt('Enter new name:', base)
-    if (!newName || newName.trim() === '' || newName === base) return
-    const sanitized = newName.trim().replace(/[<>:"/\\|?*]/g, '-')
-    const ext = entry.isDirectory ? '' : entry.name.includes('.') ? `.${entry.name.split('.').pop()}` : ''
-    const parent = entry.path.split('/').slice(0, -1).join('/')
-    const oldPath = entry.path
-    const newPath = parent ? `${parent}/${sanitized}${ext}` : `${sanitized}${ext}`
-    try {
-      await renameFile(vaultPath, oldPath, newPath)
-      if (currentFile === oldPath) setCurrentFile(newPath)
-      if (currentPath === oldPath) setCurrentPath(newPath)
-      refresh()
-    } catch (e) {
-      console.error('Rename failed', e)
-      alert('Failed to rename')
-    }
+    setRenameTarget(entry)
   }
 
   const handleDelete = async (entry: FileEntry) => {
@@ -269,6 +255,40 @@ function FolderTree({ entries, vaultPath, level = 0, draggedId }: FolderTreeProp
           </div>
         )
       })}
+    {/* Rename modal */}
+    {renameTarget && (
+      <FileNameInput
+        isOpen={true}
+        onClose={() => setRenameTarget(null)}
+        onConfirm={async (name) => {
+          try {
+            const base = name.trim().replace(/[<>:"/\\|?*]/g, '-') || 'Untitled'
+            const parent = renameTarget.path.split('/').slice(0, -1).join('/')
+            const siblings = await readDirectory(vaultPath, parent)
+            const existing = new Set(siblings.map(s => s.name))
+            const ext = renameTarget.isDirectory ? '' : (renameTarget.name.includes('.') ? `.${renameTarget.name.split('.').pop()}` : '')
+            let finalName = `${base}${ext}`
+            if (existing.has(finalName) && finalName !== renameTarget.name) {
+              let idx = 2
+              let candidate = `${base} ${idx}${ext}`
+              while (existing.has(candidate)) { idx++; candidate = `${base} ${idx}${ext}` }
+              finalName = candidate
+            }
+            const oldPath = renameTarget.path
+            const newPath = parent ? `${parent}/${finalName}` : finalName
+            if (newPath !== oldPath) {
+              await renameFile(vaultPath, oldPath, newPath)
+              refresh()
+            }
+          } finally {
+            setRenameTarget(null)
+          }
+        }}
+        placeholder="Enter new name"
+        defaultName={renameTarget.name.replace(/\.(md|excalidraw\.json)$/, '')}
+        title="Rename"
+      />
+    )}
     </div>
   )
 }
@@ -300,8 +320,25 @@ export function Sidebar() {
     const newRel = targetPath ? `${targetPath}/${name}` : name
     if (newRel === src.path) return
     await renameFile(vaultPath!, src.path, newRel)
-    if (useVaultStore.getState().currentFile === src.path) useVaultStore.getState().setCurrentFile(newRel)
-    if (useNavStore.getState().currentPath === src.path) useNavStore.getState().setCurrentPath(newRel)
+    // Update selections
+    const vs = useVaultStore.getState()
+    const ns = useNavStore.getState()
+    const curFile = vs.currentFile
+    const curPath = ns.currentPath
+    if (src.isDirectory) {
+      const prefix = src.path + '/'
+      const newPrefix = newRel + '/'
+      if (curFile && curFile.startsWith(prefix)) {
+        vs.setCurrentFile(curFile.replace(prefix, newPrefix))
+      }
+      if (curPath && curPath.startsWith(prefix)) {
+        ns.setCurrentPath(curPath.replace(prefix, newPrefix))
+      }
+      if (curPath === src.path) ns.setCurrentPath(newRel)
+    } else {
+      if (curFile === src.path) vs.setCurrentFile(newRel)
+      if (curPath === src.path) ns.setCurrentPath(newRel)
+    }
     refresh()
   }
 
@@ -376,27 +413,22 @@ export function Sidebar() {
 
   const handleNewPage = async () => {
     try {
-      // Determine the active folder (empty string means root)
       const { currentPath } = useNavStore.getState()
       const parentFolder = currentPath ? currentPath : ''
-
-      // Read contents of the active folder
+      const raw = window.prompt('New page name:', 'Untitled')
+      if (raw === null) return
+      const base = (raw.trim() || 'Untitled').replace(/[<>:"/\\|?*]/g, '-')
       const entries: FileEntry[] = await readDirectory(vaultPath, parentFolder)
       const existingFiles = new Set(entries.filter((e) => !e.isDirectory).map((e) => e.name))
-
-      // Generate Untitled, Untitled 2, Untitled 3, ...
-      let index = 1
-      let baseName = 'Untitled'
-      let displayName = baseName
-      let fileName = `${displayName}.md`
-      while (existingFiles.has(fileName)) {
-        index += 1
-        displayName = `${baseName} ${index}`
-        fileName = `${displayName}.md`
+      let fileName = `${base}.md`
+      if (existingFiles.has(fileName)) {
+        let idx = 2
+        let candidate = `${base} ${idx}.md`
+        while (existingFiles.has(candidate)) { idx++; candidate = `${base} ${idx}.md` }
+        fileName = candidate
       }
-
       const relativePath = parentFolder ? `${parentFolder}/${fileName}` : fileName
-      await writeFileToVault(vaultPath, relativePath, `# ${displayName}\n\n`)
+      await writeFileToVault(vaultPath, relativePath, `# ${fileName.replace(/\.md$/, '')}\n\n`)
       setCurrentFile(relativePath)
       refresh()
     } catch (e) {
@@ -549,12 +581,15 @@ export function Sidebar() {
                   const parentFolder = currentPath ? currentPath : ''
                   const entries: FileEntry[] = await readDirectory(vaultPath, parentFolder)
                   const existingFolders = new Set(entries.filter((e) => e.isDirectory).map((e) => e.name))
-                  let idx = 1
-                  let name = 'Untitled'
-                  let folderName = name
-                  while (existingFolders.has(folderName)) {
-                    idx += 1
-                    folderName = `Untitled ${idx}`
+                  const raw = window.prompt('New folder name:', 'Untitled')
+                  if (raw === null) return
+                  const base = (raw.trim() || 'Untitled').replace(/[<>:"/\\|?*]/g, '-')
+                  let folderName = base
+                  if (existingFolders.has(folderName)) {
+                    let idx = 2
+                    let candidate = `${base} ${idx}`
+                    while (existingFolders.has(candidate)) { idx++; candidate = `${base} ${idx}` }
+                    folderName = candidate
                   }
                   const relativePath = parentFolder ? `${parentFolder}/${folderName}` : folderName
                   await createDirectoryInVault(vaultPath, relativePath)
@@ -570,14 +605,15 @@ export function Sidebar() {
                   const parentFolder = currentPath ? currentPath : ''
                   const entries: FileEntry[] = await readDirectory(vaultPath, parentFolder)
                   const existingFiles = new Set(entries.filter((e) => !e.isDirectory).map((e) => e.name))
-                  let idx = 1
-                  let base = 'Untitled'
-                  let name = base
-                  let fileName = `${name}.excalidraw.json`
-                  while (existingFiles.has(fileName)) {
-                    idx += 1
-                    name = `${base} ${idx}`
-                    fileName = `${name}.excalidraw.json`
+                  const raw = window.prompt('New canvas name:', 'Untitled')
+                  if (raw === null) return
+                  const base = (raw.trim() || 'Untitled').replace(/[<>:"/\\|?*]/g, '-')
+                  let fileName = `${base}.excalidraw.json`
+                  if (existingFiles.has(fileName)) {
+                    let idx = 2
+                    let candidate = `${base} ${idx}.excalidraw.json`
+                    while (existingFiles.has(candidate)) { idx++; candidate = `${base} ${idx}.excalidraw.json` }
+                    fileName = candidate
                   }
                   const relativePath = parentFolder ? `${parentFolder}/${fileName}` : fileName
                   const content = JSON.stringify({
