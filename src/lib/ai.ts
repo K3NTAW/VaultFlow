@@ -230,12 +230,10 @@ async function generateText(
       thinkingPrefix = randomPhrase(PERSONA.thinkingPhrases) + '\n\n'
     }
     
-    // Step 3: Generate response based on question type
-    let response = ''
-    
+    // Step 3: Generate response based on question type (each branch returns its own response)
     // Summarization requests
     if (/summarize|summary|overview|what is|what's|tell me about/i.test(question)) {
-      response = `${thinkingPrefix}${randomPhrase(PERSONA.connectorPhrases)} about "${question}":\n\n`
+      let response = `${thinkingPrefix}${randomPhrase(PERSONA.connectorPhrases)} about "${question}":\n\n`
       
       for (const chunk of contextChunks.slice(0, 2)) {
         if (chunk.trim().length > 0) {
@@ -292,7 +290,7 @@ async function generateText(
     
     // List/enumeration requests
     if (/list|what are|which|name|show me/i.test(question)) {
-      response = `${thinkingPrefix}${randomPhrase(PERSONA.connectorPhrases)}:\n\n`
+      let response = `${thinkingPrefix}${randomPhrase(PERSONA.connectorPhrases)}:\n\n`
       
       const allItems: string[] = []
       for (const chunk of contextChunks) {
