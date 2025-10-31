@@ -114,7 +114,7 @@ export function AIPanel() {
 
   return (
     <motion.aside
-      className="flex flex-col h-screen w-[440px] min-w-[380px] max-w-[500px] bg-[#fafafa] dark:bg-[#191919] border-l border-[#e4e4e4] dark:border-[#2a2a2a]"
+      className="flex flex-col h-full w-[440px] min-w-[380px] max-w-[500px] bg-[#fafafa] dark:bg-[#191919] border-l border-[#e4e4e4] dark:border-[#2a2a2a]"
       initial={{ opacity: 0.98 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.15 }}

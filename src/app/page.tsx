@@ -102,7 +102,7 @@ export default function Home() {
         {sidebarVisible && <Sidebar />}
 
         {/* Editor/Canvas Area */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-hidden flex flex-col">
           {isCanvas && <Canvas />}
           {isNote && <Editor />}
           {!currentFile && <FolderView />}

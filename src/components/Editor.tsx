@@ -23,7 +23,6 @@ import { Superscript } from '@tiptap/extension-superscript'
 import { CharacterCount } from '@tiptap/extension-character-count'
 import { useVaultStore } from '@/store/useVaultStore'
 import { readFile, writeFileToVault } from '@/lib/vault'
-import { ScrollArea } from './ui/scroll-area'
 import { SlashMenu } from './SlashMenu'
 import { BlockControls } from './BlockControls'
 import { Button } from './ui/button'
@@ -311,10 +310,10 @@ export function Editor() {
             )}
           </div>
         </div>
-        <ScrollArea className="flex-1 bg-background">
-          <div className="relative min-h-full">
+        <div className="flex-1 overflow-y-auto bg-background notion-scroll">
+          <div className="relative">
             <div className="max-w-4xl mx-auto px-16 py-12">
-              <EditorContent editor={editor} className="h-full" />
+              <EditorContent editor={editor} />
               <BlockControls editor={editor} />
             </div>
             
@@ -447,7 +446,7 @@ export function Editor() {
               </BubbleMenu>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
       {showSlashMenu && (
         <SlashMenu
